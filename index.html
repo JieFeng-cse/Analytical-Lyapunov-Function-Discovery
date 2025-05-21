@@ -156,10 +156,19 @@
 </section>
 <!-- End paper abstract -->
 
-<section id="teaser">
-  <h2>Teaser</h2>
-  <p><strong>Framework overview:</strong> The transformer takes embeddings of the dynamical system model as input and generates candidate Lyapunov functions in an autoregressive manner. The output is the pre-order traversal of the expression’s binary tree. Candidates are verified using a global-optimization-based verification process, with counterexamples added to the training set for reward calculation. The transformer is updated via the risk-seeking policy gradient. The program terminates once a valid candidate expression is found. <strong>Note:</strong> The input symbolic tokens of encoder are the parent and sibling of current generating token if exist. For the last generated x<sub>2</sub>, for example, x<sub>1</sub> is its sibling and + is its parent (refer to the binary symbolic tree in top-right corner for hierarchical relations).</p>
-  <img src="/Analytical-Lyapunov-Function-Discovery/static/images/deepLyapunov-autoregressive.png" alt="Framework overview">
+<section id="teaser" class="section"> {/* Added class="section" for Bulma's default padding */}
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-four-fifths"> {/* You can adjust this class, e.g., is-full, is-two-thirds, is-three-quarters */}
+        <figure class="image" style="margin-bottom: 1.5rem;"> {/* Bulma's image wrapper, added style for spacing below image */}
+          <img src="/Analytical-Lyapunov-Function-Discovery/static/images/deepLyapunov-autoregressive.png" alt="Framework overview" id="framework-teaser-image"> {/* Added an ID to the image for easy CSS targeting */}
+        </figure>
+        <h2 class="subtitle has-text-centered">
+          <strong>Framework overview:</strong> The transformer takes embeddings of the dynamical system model as input and generates candidate Lyapunov functions in an autoregressive manner. The output is the pre-order traversal of the expression’s binary tree. Candidates are verified using a global-optimization-based verification process, with counterexamples added to the training set for reward calculation. The transformer is updated via the risk-seeking policy gradient. The program terminates once a valid candidate expression is found. <strong>Note:</strong> The input symbolic tokens of encoder are the parent and sibling of current generating token if exist. For the last generated x<sub>2</sub>, for example, x<sub>1</sub> is its sibling and + is its parent (refer to the binary symbolic tree in top-right corner for hierarchical relations).
+        </h2>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- Image carousel -->
