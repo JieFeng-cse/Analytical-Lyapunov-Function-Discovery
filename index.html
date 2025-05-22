@@ -224,6 +224,50 @@
   </div>
 </section>
 
+<section class="section two-figures-side-by-side">
+  <div class="container is-max-desktop">
+
+    <h2 class="title is-3 has-text-centered" style="margin-bottom: 2rem;">
+     Risk-seeking Policy Gradient
+    </h2>
+
+    <div class="columns is-vcentered is-multiline"> 
+      
+      <div class="column is-half"> 
+        <figure class="image">
+          <img id="side-figure-1" src="static/images/best_reward_comp.png" alt="Description for Figure A">
+        </figure>
+        <p class="has-text-centered" style="margin-top: 0.75rem; font-size: 0.9rem;">
+          Trajectories of the best rewards.
+        </p>
+      </div>
+
+      <div class="column is-half"> 
+        <figure class="image">
+          <img id="side-figure-2" src="static/images/top_reward_comp.png" alt="Description for Figure B">
+        </figure>
+        <p class="has-text-centered" style="margin-top: 0.75rem; font-size: 0.9rem;">
+          Trajectories of the 90% quantile of reward distibutions.
+        </p>
+      </div>
+
+    </div>
+    <div class="content"> 
+      <p>
+       Given the performance measure for the generated candidates is non-differentiable with respect to the transformer parameters, we emplocy risk-seeking policy gradient to update the transformers end-to-end. 
+       The rationale of this selection is that the final performance depends on finding at least one valid Lyapunov function, rather than optimizing for average performance.
+       Specifically, the risk-seeking policy gradient only focuses on maximizing best-case performace, i.e., the objective function aims to optimize only the rewards of high-quality candidates from the top 1-alpha quantile.
+      </p>
+
+      <p>
+        In these two figures, we show that when alpha=0.1, it achieves the best performance with fast and steady convergence, compared with the median-based threshold and the vanilla policy gradient.
+      </p>
+      
+
+    </div>
+  </div>
+</section>
+
 <section class="section"> 
   <div class="container is-max-desktop">
 
