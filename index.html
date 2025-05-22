@@ -60,7 +60,7 @@
                 <span class="author-block">
                   <a href="https://jiefeng-cse.github.io/" target="_blank">Jie Feng</a><sup>*</sup>,</span>
                   <span class="author-block">
-                    <a href="https://marcelluszhao.github.io/" target="_blank">Hao Zhao</a>
+                    <a href="https://marcelluszhao.github.io/" target="_blank">Hao Zhao</a>,</span>
                   </span>
                   <span class="author-block">
                     <a href="https://yyshi.eng.ucsd.edu/" target="_blank">Yuanyuan Shi</a>
@@ -103,7 +103,7 @@
                     <span class="icon">
                       <i class="fab fa-github"></i>
                     </span>
-                    <span>Code</span>
+                    <span>Code (Coming soon)</span>
                   </a>
                 </span>
 
@@ -142,6 +142,20 @@
 </section> -->
 <!-- End teaser video -->
 
+<section id="teaser" class="section"> 
+  <div class="container is-max-desktop">
+    <div class="columns is-centered">
+      <div class="column is-four-fifths"> 
+        <figure class="image" style="margin-bottom: 1.5rem;"> 
+          <img src="/Analytical-Lyapunov-Function-Discovery/static/images/deepLyapunov-autoregressive.png" alt="Framework overview" id="framework-teaser-image"> 
+        </figure>
+        <h2 class="subtitle has-text-centered is-size-6">
+          <strong>Framework overview:</strong> The transformer takes embeddings of the dynamical system model as input and generates candidate Lyapunov functions in an autoregressive manner. Hierarchical information is deployed to enhance the model input. For example, when generating the last token x<sub>2</sub>, its parent is +, and its sibling is x<sub>1</sub>. The output is the pre-order traversal of the expression's binary tree. Candidates are verified using a global-optimization-based verification process, with counterexamples added to the training set for reward calculation. The transformer is updated via the risk-seeking policy gradient. The program terminates once a valid candidate expression is found. 
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- Paper abstract -->
 <section class="section hero is-light">
   <div class="container is-max-desktop">
@@ -159,19 +173,7 @@
 </section>
 <!-- End paper abstract -->
 
-<section id="teaser" class="section"> 
-  <div class="container is-max-desktop">
-    <div class="columns is-centered">
-      <div class="column is-four-fifths"> 
-        <figure class="image" style="margin-bottom: 1.5rem;"> 
-          <img src="/Analytical-Lyapunov-Function-Discovery/static/images/deepLyapunov-autoregressive.png" alt="Framework overview" id="framework-teaser-image"> 
-        </figure>
-        <h2 class="subtitle has-text-centered is-size-6">
-          <strong>Framework overview:</strong> The transformer takes embeddings of the dynamical system model as input and generates candidate Lyapunov functions in an autoregressive manner. Hierarchical information is deployed to enhance the model input. For example, when generating the last token x<sub>2</sub>, its parent is +, and its sibling is x<sub>1</sub>. The output is the pre-order traversal of the expression's binary tree. Candidates are verified using a global-optimization-based verification process, with counterexamples added to the training set for reward calculation. The transformer is updated via the risk-seeking policy gradient. The program terminates once a valid candidate expression is found. 
-      </div>
-    </div>
-  </div>
-</section>
+
 
 <!-- Image carousel -->
 <!-- <section class="hero is-small">
