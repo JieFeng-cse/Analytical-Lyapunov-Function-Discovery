@@ -163,7 +163,7 @@
         <figure class="image" style="margin-bottom: 1.5rem;"> 
           <img src="/Analytical-Lyapunov-Function-Discovery/static/images/deepLyapunov-autoregressive.png" alt="Framework overview" id="framework-teaser-image"> 
         </figure>
-        <h2 class="subtitle has-text-centered">
+        <h2 class="subtitle has-text-centered is-size-6">
           <strong>Framework overview:</strong> The transformer takes embeddings of the dynamical system model as input and generates candidate Lyapunov functions in an autoregressive manner. Hierarchical information is deployed to enhance the model input. For example, when generating the last token x<sub>2</sub>, its parent is +, and its sibling is x<sub>1</sub>. The output is the pre-order traversal of the expression's binary tree. Candidates are verified using a global-optimization-based verification process, with counterexamples added to the training set for reward calculation. The transformer is updated via the risk-seeking policy gradient. The program terminates once a valid candidate expression is found. 
       </div>
     </div>
