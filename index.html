@@ -200,29 +200,67 @@
   </div>
 </section>
 
-<section class="section"> 
+<!-- Lyapunov Function Verification (image‑based) -->
+<section id="lyapunov-verification" class="section">
   <div class="container is-max-desktop">
 
+    <h2 class="title is-3">Lyapunov Function Verification</h2>
 
-    <h2 class="title is-3"> 
-      Lyapunov Function Verification
-    </h2>
+    <!-- 2‑column layout: text on the left, figure on the right -->
+    <div class="columns is-vcentered is-multiline">
 
+      <!-- LEFT COLUMN ---------------------------------------------------- -->
+      <div class="column is-half">
+        <h3 class="title is-5" style="margin-bottom:0.75rem;">Global‑Optimization‑Based Verification</h3>
+        <ul style="margin-left:1.25rem;">
+          <li>Find the greatest violation.</li>
+          <li><strong>Verifier:</strong> Simplicial Homology Global Optimization (SHGO).</li>
+        </ul>
 
-    <figure class="image" style="margin-top: 1rem; margin-bottom: 1.5rem;"> 
-      <img id="your-figure-image" src="static/images/Lyapunov_verify.png" alt="Descriptive text for your image">
-    </figure>
+        <!-- Red highlighted explanatory text -->
+        <p class="highlight-red" style="margin-top:1.25rem;">
+          What does <em>‘adequately&nbsp;sampled’</em> mean?
+        </p>
+        <p style="margin-bottom:1.5rem;">
+          The sub‑convex domains cover the whole space of interest. The required number can be unbounded.
+        </p>
 
-    <div class="content"> 
-      <p>
-       We verify the Lyapunov candidates by a global optimization solver - the SHGO algorithm, which provides a convergence guarantee. By using the global optimizer, we find the greatest violation, and lead to better final quality of the found Lyapunov functions.
-      </p>
-      
+        <!-- Proposition box -->
+        <div class="proposition-box">
+          <p style="margin-bottom:0;"><strong>Proposition&nbsp;<span style="font-weight:500;">(Convergence Guarantees of&nbsp;SHGO)</span></strong> &nbsp;<em>(Informal)</em> &mdash; For a given continuous objective function&nbsp;<em>f</em> that is <em>adequately&nbsp;sampled</em>, the global minimizer can be found.</p>
+        </div>
+      </div>
 
-    </div>
+      <!-- RIGHT COLUMN --------------------------------------------------- -->
+      <div class="column is-half">
+        <figure class="image" style="width:100%;max-width:420px;margin:0 auto;">
+          <!-- Replace the src path with the actual location of your PNG image -->
+          <img src="static/images/shgo_plot.png" alt="Contour landscape and sub‑convex domain used by SHGO">
+        </figure>
+      </div>
 
+    </div> <!-- /columns -->
+
+    <!-- Caption underneath -->
+    <p class="figure-caption">
+      We verify the Lyapunov candidates using the SHGO global optimizer. By locating the worst‑case violation, we obtain higher‑quality Lyapunov functions.
+    </p>
   </div>
 </section>
+
+<!-- -------------- Inline style for the proposition box & red text -->
+<style>
+  .proposition-box{
+    border:4px solid #0d274d;
+    border-radius:12px;
+    padding:1rem 1.25rem;
+    background:#f8f8f8;
+    font-family:"Times New Roman",serif;
+    line-height:1.35;
+  }
+  .highlight-red{color:#c00000;font-weight:600;}
+  .figure-caption{font-size:0.9rem;text-align:center;margin-top:1rem;}
+</style>
 
 <section class="section two-figures-side-by-side">
   <div class="container is-max-desktop">
