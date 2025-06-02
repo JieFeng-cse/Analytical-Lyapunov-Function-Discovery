@@ -281,6 +281,10 @@
   }
 </style>
 
+<!-- -------------- MathJax for LaTeX rendering ---------------------------- -->
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
 <section class="section two-figures-side-by-side">
   <div class="container is-max-desktop">
 
@@ -355,7 +359,7 @@
       <div class="column has-text-centered">
         <figure class="image" style="max-width:180px;margin:0 auto;">
           <!-- Provide the correct path to the DEAP/GP logo -->
-          <img src="static/images/GP_logo.png" alt="DEAP: GP package logo">
+          <img src="static/images/deap_logo.png" alt="DEAP: GP package logo">
         </figure>
         <p style="margin-top:0.75rem;font-size:0.9rem;">DEAP: GP package</p>
       </div>
@@ -365,7 +369,7 @@
     <!-- Expert guidance loss formula -->
     <div class="columns is-centered" style="margin-top:1.75rem;">
       <div class="column is-narrow has-text-centered">
-        <div class="token-box blue-box">
+        <div class="token-box blue-box" style="overflow-x:auto; white-space: nowrap;">
           \(
             \mathcal{L}_{\text{ce}} = \frac{-1}{G}\sum_{i=1}^{G}\frac{1}{k_i}\,R(\tilde{V}_{gp}^{i})\sum_{j=1}^{k_i}\log\Big(p(\tilde{V}_{gp_j}^{i}\,|\,\tilde{V}_{gp_{1:(j-1)}}^{i};\,\phi;f(x))\Big)
           \)
