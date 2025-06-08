@@ -1,0 +1,28 @@
+gp_meld:
+  run_gp_meld: true
+  generations: 35
+  p_crossover: 0.5
+  p_mutate: 0.5
+  tournament_size: 7
+  train_n: 100
+  mutate_tree_max: 3
+
+exp:
+  noise: 0.0
+  dataset_size_multiplier: 1.0
+  n_samples: 2_000_000
+  test_sample_multiplier: 1
+  learning_rate: 
+  function_set: #Do not fill
+  priority_queue_training: true
+  model_pre_training_path: ""
+  run_pool_programs_test: false
+  seed_start: 1
+  seed_runs: 100
+  n_cores_task: 10
+  baselines: []
+  benchmark: "fn_d_all"
+  benchmark_path: "./libs/sd3/dso/dso/task/regression/benchmarks_bkup_1.csv"
+  save_true_log_likelihood: false
+
+
