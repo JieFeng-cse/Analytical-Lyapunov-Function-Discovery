@@ -23,8 +23,8 @@ def config_factory():
         },
         "prior": {
             "length": {
-                "min_": 4,
-                "max_": 12,
+                "min_": 12,
+                "max_": 25,
                 "on": True,
             },
             "repeat": {"tokens": "const", "min_": None, "max_": 5, "on": True},
@@ -33,23 +33,28 @@ def config_factory():
             "const": {"on": False},
             "no_inputs": {"on": True},
             "uniform_arity": {"on": False},
-            "soft_length": {"loc": 10, "scale": 5, "on": True},
+            "soft_length": {"loc": 15, "scale": 5, "on": True},
         },
     }
 
 def dynamics():
-    x1, x2, x3, x4, x5, x6 = sym.symbols("x1, x2, x3, x4, x5, x6")
+    x1, x2, x3, x4, x5, x6, x7, x8 = sym.symbols("x1, x2, x3, x4, x5, x6, x7, x8")
 
 
-    ## 3-D Trig Dyanmics 
-    ## fn_d_all_t_5 is the corresponding state space and training set setting in libs/sd3/dso/dso/task/regression/benchmarks_bkup_1.csv
+    ## 8-D Polynomial System
+    ## fn_d_all_n_5 is the corresponding state space and training set setting in libs/sd3/dso/dso/task/regression/benchmarks_bkup_1.csv
 
-
-    state_variables = [x1, x2, x3]
-    dynamics_ode = [x2,
-            - 1 * sym.sin(x1)*sym.cos(x1) - x2 - 1 * sym.sin(x3)*sym.cos(x3),
-            x2 - x3]
-
+    
+    state_variables = [x1, x2, x3, x4, x5, x6, x7, x8]
+    dynamics_ode = [-x1 + 0.5 * x2 - 0.1 * x5 ** 2,
+                    -0.5 * x1 - x2,
+                    -x3 + 0.5 * x4 - 0.1 * x1 ** 2,
+                    -0.5 * x3 - x4,
+                    -x5 + 0.5 * x6 + 0.1 * x7 ** 2,
+                    -0.5 * x5 - x6,
+                    -x7 + 0.5 * x8,
+                    -0.5 * x7 - x8 - 0.1 * x4 ** 2]
+    
     return state_variables, dynamics_ode
 
 

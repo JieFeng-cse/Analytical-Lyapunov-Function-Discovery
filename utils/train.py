@@ -720,7 +720,7 @@ def optomize_at_test(
             print("\n==============Start Supervised Learning==============\n")
 
             ## Sort gp programs by reward and select the top 30% programs
-            gp_collection_reward = np.array([1 / (gp_p.task.evaluate(gp_p)["nmse_test"] + 1) for gp_p in gp_collection if gp_p.task.evaluate(gp_p)["nmse_test"] != None])
+            p_collection_reward = np.array([1 / (gp_p.task.evaluate(gp_p)["nmse_test"] + 1) if gp_p.task.evaluate(gp_p)["nmse_test"] != None else 0 for gp_p in gp_collection])
             gp_ratio = (config["gp_meld"]["train_n"] / len(gp_collection)) * 0.3
             gp_quantile = np.quantile(gp_collection_reward, 1 - gp_ratio, interpolation="higher")  # pyright: ignore
             gp_keep = gp_collection_reward >= gp_quantile
