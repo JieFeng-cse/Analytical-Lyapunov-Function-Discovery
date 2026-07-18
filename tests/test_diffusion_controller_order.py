@@ -45,6 +45,26 @@ def test_random_order_routes_and_yields_valid():
         assert ctrl.grammar.is_complete(list(row))      # valid complete tree (short-circuits at close)
 
 
+def test_blocksemiar_is_the_default():
+    ctrl = DiffusionController(FakePrior(), FakeLib(), task=None, vocab_size=10,
+                               max_length=8, d_model=16, nlayers=1, nhead=2)
+    assert ctrl.sampler_order == "blocksemiar"
+    assert ctrl.block_size == 4
+
+
+def test_blocksemiar_order_routes_and_yields_valid():
+    ctrl = DiffusionController(FakePrior(), FakeLib(), task=None, vocab_size=10,
+                               max_length=8, sampler_order="blocksemiar", block_size=4,
+                               d_model=16, nlayers=1, nhead=2)
+    assert ctrl.sampler_order == "blocksemiar"
+    torch.manual_seed(0)
+    dyn = torch.zeros((4, 1), dtype=torch.long)
+    actions, obs, priors = ctrl.sample(4, dyn)
+    assert actions.shape == (4, 8)
+    for row in actions:
+        assert ctrl.grammar.is_complete(list(row))
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
