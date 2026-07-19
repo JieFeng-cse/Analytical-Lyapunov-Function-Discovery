@@ -19,7 +19,8 @@ from dso.prior import LengthConstraint
 
 from .grammar import Grammar
 from .denoiser import MaskedDiffusionDenoiser
-from .sampler import diffusion_sample, diffusion_sample_random, diffusion_sample_blocksemiar
+from .sampler import (diffusion_sample, diffusion_sample_random,
+                      diffusion_sample_blocksemiar, diffusion_sample_opblock)
 
 
 class DiffusionController(nn.Module):
@@ -27,7 +28,7 @@ class DiffusionController(nn.Module):
                  max_length=30, pqt=False, pqt_k=10, pqt_batch_size=1,
                  rl_weight=1.0, learning_rate=1e-3, entropy_weight=0.005,
                  vocab_size=None, lam=0.5, max_const=10,
-                 d_model=128, nlayers=4, nhead=4, sampler_order="blocksemiar",
+                 d_model=128, nlayers=4, nhead=4, sampler_order="opblock",
                  num_diffusion_steps=12, reveal_schedule="cosine", block_size=4, **kwargs):
         super().__init__()
         self.prior = prior
@@ -42,7 +43,7 @@ class DiffusionController(nn.Module):
         self.pqt_k = pqt_k
         self.pqt_batch_size = pqt_batch_size
         self.lam = float(lam)
-        self.sampler_order = str(sampler_order)          # "preorder" (semi-AR) | "random" (Phase-3 any-order) | "blocksemiar"
+        self.sampler_order = str(sampler_order)          # "preorder" (semi-AR) | "random" (Phase-3 any-order) | "blocksemiar" | "opblock"
         self.num_diffusion_steps = int(num_diffusion_steps) if num_diffusion_steps else 12
         self.reveal_schedule = str(reveal_schedule)
         self.block_size = int(block_size)
@@ -74,6 +75,11 @@ class DiffusionController(nn.Module):
                                            dyn, device=self.device)
         elif self.sampler_order == "blocksemiar":
             seqs = diffusion_sample_blocksemiar(
+                self.denoiser, self.grammar, n, self.max_length, dyn,
+                device=self.device, block_size=self.block_size,
+                schedule=self.reveal_schedule)
+        elif self.sampler_order == "opblock":
+            seqs = diffusion_sample_opblock(
                 self.denoiser, self.grammar, n, self.max_length, dyn,
                 device=self.device, block_size=self.block_size,
                 schedule=self.reveal_schedule)

@@ -174,6 +174,13 @@ def _blocks(max_len, block_size):
     return [list(range(s, min(s + b, max_len))) for s in range(0, max_len, b)]
 
 
+def _opfirst_rank(free, conf, is_op):
+    """Rank free positions operator-candidates first, confidence as tiebreak
+    within each class (inverse of pure-confidence order, which defers
+    high-arity/operator commitments until context sharpens)."""
+    return sorted(free, key=lambda q: (is_op[q], conf[q]), reverse=True)
+
+
 @torch.no_grad()
 def diffusion_sample_blocksemiar(denoiser, grammar, batch, max_len, dyn_tokens, device,
                                  *, block_size=4, steps_per_block=None, temperature=1.0,
@@ -239,6 +246,88 @@ def diffusion_sample_blocksemiar(denoiser, grammar, batch, max_len, dyn_tokens, 
                     conf[p] = float(probs[tok])
                 kk = len(free) if last else max(1, min(int(k), len(free)))
                 reveal = sorted(free, key=lambda q: conf[q], reverse=True)[:kk]
+                for p in reveal:
+                    grid[b, p] = toks[p]
+                    committed[b, p] = True
+                if grammar.is_complete_grid(grid[b].tolist()):
+                    done[b] = True
+
+    seqs, n_repaired = [], 0
+    for b in range(batch):
+        seq, used_repair = _decode_flag(grid[b].tolist(), grammar)
+        seqs.append(seq)
+        n_repaired += int(used_repair)
+    if stats is not None:
+        stats["batch"] = batch
+        stats["n_repaired"] = n_repaired
+        stats["repair_rate"] = n_repaired / max(1, batch)
+    return seqs
+
+
+@torch.no_grad()
+def diffusion_sample_opblock(denoiser, grammar, batch, max_len, dyn_tokens, device,
+                             *, block_size=4, steps_per_block=None, temperature=1.0,
+                             schedule="cosine", rng=None, stats=None):
+    """Operator-first WITHIN block semi-AR reveal order (invented 2026-07-19: combines
+    BACKLOG #1 opfirst and #2 blocksemiar). Identical block partition and GLOBAL
+    tight-completion pressure to `diffusion_sample_blocksemiar`, but the in-block
+    reveal ranking is `_opfirst_rank` (operator-candidates first, confidence as
+    tiebreak) instead of confidence alone -- so within each block, any candidate with
+    arity > 0 commits before every terminal candidate that step, same as
+    `diffusion_sample_opfirst`, just restricted to the current block's free positions.
+    """
+    n_choices = grammar.L
+    mask_id = denoiser.mask_id
+    grid = torch.full((batch, max_len), mask_id, dtype=torch.long, device=device)
+    committed = torch.zeros((batch, max_len), dtype=torch.bool, device=device)
+    done = [False] * batch
+    term_mask = np.zeros(n_choices, dtype=bool)
+    term_mask[grammar.terminal_tokens] = True
+
+    for block in _blocks(max_len, block_size):
+        if all(done):
+            break
+        counts = _reveal_counts(len(block), steps_per_block or len(block), schedule)
+        for step, k in enumerate(counts):
+            if all(done):
+                break
+            t = torch.full((batch,), 1.0 - step / len(counts), device=device)
+            logits = denoiser(grid, t, dyn_tokens)                   # (B, L, n_choices)
+            last = (step == len(counts) - 1)
+            grid_list = grid.tolist()
+            comm_list = committed.tolist()
+            for b in range(batch):
+                if done[b]:
+                    continue
+                free = [p for p in block if not comm_list[b][p]]
+                if not free:
+                    continue
+                total_free = max_len - sum(comm_list[b])                 # GLOBAL, not block-local
+                d = grammar.dangling(_committed_prefix(grid_list[b], comm_list[b], n_choices))
+                tight = total_free <= d
+                conf, toks, is_op = {}, {}, {}
+                for p in free:
+                    ctx = _revealed_before(grid_list[b], p, n_choices)
+                    mask = grammar.valid_token_mask(ctx)[:n_choices].copy()
+                    if tight:                                          # force terminals to close the tree
+                        m2 = mask & term_mask
+                        if m2.any():
+                            mask = m2
+                    if not mask.any():
+                        mask[int(grammar.terminal_tokens[0])] = True
+                    valid = torch.as_tensor(mask, dtype=torch.bool, device=device)
+                    lg = logits[b, p].masked_fill(~valid, float("-inf"))
+                    if torch.isinf(lg).all():
+                        probs = valid.float()
+                    else:
+                        probs = torch.softmax(lg / temperature, dim=-1)
+                    probs = probs / probs.sum()
+                    tok = int(torch.multinomial(probs, 1))
+                    toks[p] = tok
+                    conf[p] = float(probs[tok])
+                    is_op[p] = grammar.arity(tok) > 0
+                kk = len(free) if last else max(1, min(int(k), len(free)))
+                reveal = _opfirst_rank(free, conf, is_op)[:kk]
                 for p in reveal:
                     grid[b, p] = toks[p]
                     committed[b, p] = True
