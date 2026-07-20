@@ -29,7 +29,7 @@ class DiffusionController(nn.Module):
                  rl_weight=1.0, learning_rate=1e-3, entropy_weight=0.005,
                  vocab_size=None, lam=0.5, max_const=10,
                  d_model=128, nlayers=4, nhead=4, sampler_order="opblock",
-                 num_diffusion_steps=12, reveal_schedule="cosine", block_size=4, **kwargs):
+                 num_diffusion_steps=12, reveal_schedule="cosine", block_size=2, **kwargs):
         super().__init__()
         self.prior = prior
         self.task = task
