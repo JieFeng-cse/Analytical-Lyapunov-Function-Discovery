@@ -28,7 +28,7 @@ class DiffusionController(nn.Module):
                  max_length=30, pqt=False, pqt_k=10, pqt_batch_size=1,
                  rl_weight=1.0, learning_rate=1e-3, entropy_weight=0.005,
                  vocab_size=None, lam=0.5, max_const=10,
-                 d_model=128, nlayers=4, nhead=4, sampler_order="opblock",
+                 d_model=128, nlayers=4, nhead=4, sampler_order="blocksemiar",
                  num_diffusion_steps=12, reveal_schedule="cosine", block_size=2, **kwargs):
         super().__init__()
         self.prior = prior
@@ -146,7 +146,19 @@ class DiffusionController(nn.Module):
                              actions.reshape(-1), reduction="none").reshape(B, L)
         ce = ce * masked.float()
         denom = masked.float().sum(1).clamp(min=1.0)
-        return (ce.sum(1) / denom) / t                                       # (B,) MDLM 1/t weighting
+
+        # Entropy bonus (design BACKLOG "entbonus"): encourage high denoiser entropy at
+        # masked positions whose true token is an operator (arity>0), the positions the
+        # Flexibility-Trap mechanism collapses onto first when RL narrows the policy.
+        arities = torch.as_tensor(self.grammar.arities, device=dev, dtype=torch.long)
+        is_operator = arities[actions.clamp(0, self.n_choices - 1)] > 0
+        op_mask = masked & is_operator
+        probs = F.softmax(logits, dim=-1)
+        ent = -(probs * torch.log(probs.clamp_min(1e-9))).sum(-1)             # (B,L)
+        op_denom = op_mask.float().sum(1).clamp(min=1.0)
+        entropy_term = (ent * op_mask.float()).sum(1) / op_denom              # (B,) mean entropy at op positions
+
+        return (ce.sum(1) / denom) / t, entropy_term                         # (B,), (B,)
 
     def train_loss(self, b, sampled_batch, pqt_batch=None, test=False):
         dev = self.device
@@ -156,13 +168,15 @@ class DiffusionController(nn.Module):
         dyn = self._as_dyn(sampled_batch.data_to_encode, actions.shape[0])
         actions = actions.clamp(0, self.n_choices - 1)
 
-        ce = self._denoise_ce(actions, lengths, dyn)                          # (B,)
+        ce, entropy_term = self._denoise_ce(actions, lengths, dyn)            # (B,), (B,)
         adv = rewards - float(b)
         w = torch.softmax(adv / self.lam, dim=0).detach()                     # FKL weights
         fkl = (w * ce).sum()
         mle = ce.mean()
-        total = self.rl_weight * fkl + (1.0 - self.rl_weight) * mle
-        return total, {"fkl": float(fkl.item()), "mle": float(mle.item())}
+        entropy_bonus = entropy_term.mean()
+        total = self.rl_weight * fkl + (1.0 - self.rl_weight) * mle - self.entropy_weight * entropy_bonus
+        return total, {"fkl": float(fkl.item()), "mle": float(mle.item()),
+                       "entropy_bonus": float(entropy_bonus.item())}
 
     # GP-guidance uses train_loss with small rl_weight; provide an explicit alias too.
     def train_mle_loss(self, b, sampled_batch, pqt_batch=None, test=False):
