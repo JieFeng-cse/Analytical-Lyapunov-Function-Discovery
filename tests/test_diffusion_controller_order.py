@@ -62,7 +62,7 @@ def test_blocksemiar_is_the_default():
     ctrl = DiffusionController(FakePrior(), FakeLib(), task=None, vocab_size=10,
                                max_length=8, d_model=16, nlayers=1, nhead=2)
     assert ctrl.sampler_order == "blocksemiar"
-    assert ctrl.block_size == 2
+    assert ctrl.block_size == 4
 
 
 def test_opblock_order_routes_and_yields_valid():
