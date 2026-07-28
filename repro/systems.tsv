@@ -12,3 +12,7 @@ poly2d	example_config/config_poly2d.py	fn_d_all_b	2	04:00:00
 poly3dA	example_config/config_poly3dA.py	fn_d_all_c	3	06:00:00
 poly3dB	example_config/config_poly3dB.py	fn_d_all_d	3	06:00:00
 lossless6d	example_config/config_lossless6d.py	fn_d_all_e	6	16:00:00
+rotor2	example_config/config_rotor2.py	fn_rotor_2	3	16:00:00
+rotor3	example_config/config_rotor3.py	fn_rotor_3	5	16:00:00
+rotor4	example_config/config_rotor4.py	fn_rotor_4	7	16:00:00
+rotor5	example_config/config_rotor5.py	fn_rotor_5	9	16:00:00
