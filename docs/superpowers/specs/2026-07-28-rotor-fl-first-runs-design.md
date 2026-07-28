@@ -69,9 +69,10 @@ For candidate V (sympy expr from tokens):
 - The "all variables used" validity rule stays.
 
 Success criterion mirrors the existing one: violation measure < threshold on the big
-test sample, then the adapted falsifier passes: PGD (sympytorch) and SHGO maximize
-LV + φ(V) over the box restricted to {H > R} (implemented as penalty masking), plus
-the existing random/near-boundary sampling rounds. Coercivity and periodicity are
+test sample, then the adapted falsifier passes: SHGO (penalty-masked) plus
+10×10⁶-point random sampling maximize LV + φ(V) outside K_R; torch-PGD is deferred
+(log/exp objectives are numerically unsafe under unconstrained attack); in-loop
+harvesting appends top-50 random-search violators per epoch. Coercivity and periodicity are
 NOT checked in-loop; they are offline post-hoc checks on the winning expressions.
 
 ## Grammar and priors

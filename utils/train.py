@@ -42,6 +42,15 @@ from config import dynamics, get_config
 import ast
 import pandas as pd
 
+# Foster-Lyapunov (stochastic) task spec, when the active config provides one.
+# FL tasks have no origin-anchored positive-definiteness structure, so the
+# deterministic verification path (PGD/SHGO around the origin) is bypassed.
+try:
+    from config import generator_spec as _fl_generator_spec
+    FL_SPEC = _fl_generator_spec()
+except ImportError:
+    FL_SPEC = None
+
 
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -397,17 +406,35 @@ def optomize_at_test(
         
         ## PGD collection for each sampled candidate expression
         print("\n=========================PGD Collection Starts=========================\n")
-        pgd_initial = torch.rand(Program.task.X_train.shape[0] // 100, Program.task.X_train.shape[1])
-        with mp.Pool(processes= N_POOL, initializer=init_worker) as pool:
-            pgd_output = pool.starmap(pgd_check, [(i.sympy_expr[0], pgd_initial, low_bound, up_bound) for i in programs if (not i.invalid)])
+        if FL_SPEC is None:
+            pgd_initial = torch.rand(Program.task.X_train.shape[0] // 100, Program.task.X_train.shape[1])
+            with mp.Pool(processes= N_POOL, initializer=init_worker) as pool:
+                pgd_output = pool.starmap(pgd_check, [(i.sympy_expr[0], pgd_initial, low_bound, up_bound) for i in programs if (not i.invalid)])
 
-        pgd_example = []
-        for j in pgd_output:
-            if len(j[1]) > 0:
+            pgd_example = []
+            for j in pgd_output:
+                if len(j[1]) > 0:
+                    if len(pgd_example) > 0:
+                        pgd_example = np.concatenate((pgd_example, j[1]), axis = 0)
+                    else:
+                        pgd_example = j[1]
+        else:
+            # FL mode: harvest top-k violators of the drift condition by random
+            # search (torch-PGD is unsafe on log/exp objectives; see spec).
+            from utils.fl_reward import fl_harvest
+            sv, dr = dynamics()
+            pgd_example = []
+            for prog in [i for i in programs if (not i.invalid)]:
+                try:
+                    pts = fl_harvest(prog.sympy_expr[0], sv, dr, FL_SPEC,
+                                     low_bound, up_bound, n_pts=100_000, k=50,
+                                     seed=epoch)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    continue
                 if len(pgd_example) > 0:
-                    pgd_example = np.concatenate((pgd_example, j[1]), axis = 0)
+                    pgd_example = np.concatenate((pgd_example, pts), axis = 0)
                 else:
-                    pgd_example = j[1]
+                    pgd_example = pts
 
         ratio = 0.2
         if len(pgd_example) > Program.task.X_train.shape[0] * ratio:
@@ -552,74 +579,106 @@ def optomize_at_test(
         
         ## SHGO Numerical Verification Process + Counter example feedback
         
-        counter_example = np.array([])
-        count = 0
+        if FL_SPEC is None:
+            counter_example = np.array([])
+            count = 0
 
-        print(f"Number of Programs for Minimization: {len(p_train_ver)}")
-        with mp.Pool(processes= N_POOL, initializer=init_worker) as pool:
-            counter_example_splits = pool.starmap(check_options, [(i.sympy_expr[0], low_bound, up_bound) for i in p_train_ver])
-            # counter_example_splits = pool.starmap(pgd_check, [(i.sympy_expr[0], Program.task.X_test) for i in p_train])
+            print(f"Number of Programs for Minimization: {len(p_train_ver)}")
+            with mp.Pool(processes= N_POOL, initializer=init_worker) as pool:
+                counter_example_splits = pool.starmap(check_options, [(i.sympy_expr[0], low_bound, up_bound) for i in p_train_ver])
+                # counter_example_splits = pool.starmap(pgd_check, [(i.sympy_expr[0], Program.task.X_test) for i in p_train])
 
-        pool = None
-        print(len(counter_example_splits))
-        for j in counter_example_splits:
-            if len(j[1]) > 0:
-                if len(counter_example) > 0:
-                    count += j[1].shape[0]
-                    counter_example = np.concatenate((counter_example, j[1]), axis = 0)
-                else:
-                    counter_example = j[1]
+            pool = None
+            print(len(counter_example_splits))
+            for j in counter_example_splits:
+                if len(j[1]) > 0:
+                    if len(counter_example) > 0:
+                        count += j[1].shape[0]
+                        counter_example = np.concatenate((counter_example, j[1]), axis = 0)
+                    else:
+                        counter_example = j[1]
 
 
-        if len(counter_example) > counter_example_size:
-            random_ind = np.random.randint(0, len(counter_example), counter_example_size)
-            counter_example = counter_example[random_ind]
+            if len(counter_example) > counter_example_size:
+                random_ind = np.random.randint(0, len(counter_example), counter_example_size)
+                counter_example = counter_example[random_ind]
         
-        if len(counter_example) > 0:
+            if len(counter_example) > 0:
             
-            Program.task.X_test = np.vstack((Program.task.X_test, counter_example))
+                Program.task.X_test = np.vstack((Program.task.X_test, counter_example))
 
-            if  len(Program.task.X_test) > counter_example_size * 2:
-                random_ind = np.random.randint(0, Program.task.X_test.shape[0], counter_example_size * 2)
-                Program.task.X_test = Program.task.X_test[random_ind]
+                if  len(Program.task.X_test) > counter_example_size * 2:
+                    random_ind = np.random.randint(0, Program.task.X_test.shape[0], counter_example_size * 2)
+                    Program.task.X_test = Program.task.X_test[random_ind]
 
-        Program.task.y_test = np.zeros(Program.task.X_test.shape[0])
+            Program.task.y_test = np.zeros(Program.task.X_test.shape[0])
 
-        if True:
-            if epoch == 0:
-                Program.task.X_train = Program.task.X_test
-                Program.task.y_train = Program.task.y_test
+            if True:
+                if epoch == 0:
+                    Program.task.X_train = Program.task.X_test
+                    Program.task.y_train = Program.task.y_test
             
-            else:
-                portion = (min((epoch - (-1)) * 0.003, 0.1))
+                else:
+                    portion = (min((epoch - (-1)) * 0.003, 0.1))
                 
-                add_size = int(portion * Program.task.X_test.shape[0])
-                add_part_ind = np.random.randint(0, Program.task.X_test.shape[0], add_size)
-                add_part = Program.task.X_test[add_part_ind]
+                    add_size = int(portion * Program.task.X_test.shape[0])
+                    add_part_ind = np.random.randint(0, Program.task.X_test.shape[0], add_size)
+                    add_part = Program.task.X_test[add_part_ind]
                 
-                keep_size = int((1 - portion) * Program.task.X_test.shape[0])
-                keep_part_ind = np.random.randint(0, Program.task.X_train.shape[0], keep_size)
-                keep_part = Program.task.X_train[keep_part_ind]
+                    keep_size = int((1 - portion) * Program.task.X_test.shape[0])
+                    keep_part_ind = np.random.randint(0, Program.task.X_train.shape[0], keep_size)
+                    keep_part = Program.task.X_train[keep_part_ind]
                 
-                Program.task.X_train = np.vstack((keep_part, add_part))
-                Program.task.y_train = np.zeros(Program.task.X_train.shape[0])
+                    Program.task.X_train = np.vstack((keep_part, add_part))
+                    Program.task.y_train = np.zeros(Program.task.X_train.shape[0])
 
-        print(Program.task.X_train.shape)
-        print(Program.task.y_train.shape)
+            print(Program.task.X_train.shape)
+            print(Program.task.y_train.shape)
 
-        print(Program.task.X_test.shape)
-        print(Program.task.y_test.shape)
+            print(Program.task.X_test.shape)
+            print(Program.task.y_test.shape)
 
-        print(f"\n=======================Successfully Added {counter_example.shape} Counter Examples=======================\n")
+            print(f"\n=======================Successfully Added {counter_example.shape} Counter Examples=======================\n")
 
-        del counter_example
+            del counter_example
+        else:
+            # FL mode: no origin-anchored SHGO harvesting. Random-search
+            # violators (above) already augment X_train each epoch, and SHGO
+            # runs in the final falsifier gate below.
+            pass
 
         ## Evaluate if any output expression is numerically valid
         if eval_all:
             success = [p.evaluate.get("success") for p in programs]  # pyright: ignore
             if any(success):
-                minimizer_check = [check_options(programs[i].sympy_expr[0] * 1e5, low_bound, up_bound)[0] if success[i] else False for i in range(len(success))]
-                overall_check = [final_check(programs[i].sympy_expr[0], low_bound, up_bound) if minimizer_check[i] else False for i in range(len(success))]
+                if FL_SPEC is None:
+                    minimizer_check = [check_options(programs[i].sympy_expr[0] * 1e5, low_bound, up_bound)[0] if success[i] else False for i in range(len(success))]
+                    overall_check = [final_check(programs[i].sympy_expr[0], low_bound, up_bound) if minimizer_check[i] else False for i in range(len(success))]
+                else:
+                    # FL mode final falsifier: random search (10 x 1e6 pts) then
+                    # penalty-masked SHGO on max(LV + phi(V)) outside K_R.
+                    from utils.fl_reward import fl_random_falsify, fl_shgo_falsify
+                    sv, dr = dynamics()
+                    overall_check = []
+                    for i in range(len(success)):
+                        if not success[i]:
+                            overall_check.append(False)
+                            continue
+                        V = programs[i].sympy_expr[0]
+                        try:
+                            ok_rand, worst = fl_random_falsify(V, sv, dr, FL_SPEC,
+                                                               low_bound, up_bound,
+                                                               n_rounds=10, n_pts=1_000_000,
+                                                               seed=i)
+                            ok_shgo = fl_shgo_falsify(V, sv, dr, FL_SPEC,
+                                                      low_bound, up_bound) if ok_rand else False
+                        except Exception as exc:  # pylint: disable=broad-exception-caught
+                            log_and_print(f"[FL final check] i={i} falsifier error: {exc}")
+                            overall_check.append(False)
+                            continue
+                        log_and_print(f"[FL final check] i={i} random_ok={ok_rand} "
+                                      f"shgo_ok={ok_shgo if ok_rand else 'skipped'} worst={worst}")
+                        overall_check.append(ok_rand and ok_shgo)
                 success = overall_check
                 if any(success) > 0:
                     p_final = programs[success.index(True)]
@@ -745,14 +804,20 @@ def optomize_at_test(
 
             if any(gp_success):
                 log_and_print([gp_collection[i].sympy_expr[0] for i in range(len(gp_collection)) if gp_success[i]])
-                minimizer_check = [check_options(gp_collection[i].sympy_expr[0] * 1e4, low_bound, up_bound)[0] if gp_success[i] else False for i in range(len(gp_success))]
-                overall_check = [final_check(gp_collection[i].sympy_expr[0], low_bound, up_bound) if minimizer_check[i] else False for i in range(len(gp_success))]
-                gp_success_f = overall_check
-                if any(gp_success_f) > 0:
-                    p_final = gp_collection[gp_success_f.index(True)]
-                    log_and_print(f"Number of valid equations: {np.sum(gp_success_f)}. Program should stopped")
-                    log_and_print(p_final.sympy_expr[0])
-                    log_and_print([gp_collection[i].sympy_expr[0] for i in range(len(gp_success_f)) if gp_success_f[i]])
+                if FL_SPEC is None:
+                    minimizer_check = [check_options(gp_collection[i].sympy_expr[0] * 1e4, low_bound, up_bound)[0] if gp_success[i] else False for i in range(len(gp_success))]
+                    overall_check = [final_check(gp_collection[i].sympy_expr[0], low_bound, up_bound) if minimizer_check[i] else False for i in range(len(gp_success))]
+                    gp_success_f = overall_check
+                    if any(gp_success_f) > 0:
+                        p_final = gp_collection[gp_success_f.index(True)]
+                        log_and_print(f"Number of valid equations: {np.sum(gp_success_f)}. Program should stopped")
+                        log_and_print(p_final.sympy_expr[0])
+                        log_and_print([gp_collection[i].sympy_expr[0] for i in range(len(gp_success_f)) if gp_success_f[i]])
+                else:
+                    # FL mode: origin-anchored check_options/final_check do not apply.
+                    # GP candidates re-enter the sampled batch and are certified by
+                    # the FL falsifier gate above.
+                    log_and_print("[FL] GP-candidate certification deferred to the FL final falsifier gate.")
  
             deap_lengths = np.array([min(len(p.traversal), controller.max_length) for p in gp_collection], dtype=np.int32)
             deap_r = gp_collection_reward
