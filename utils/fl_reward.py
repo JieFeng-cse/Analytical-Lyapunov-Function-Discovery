@@ -17,11 +17,14 @@ def phi_vals(v, alpha, c):
 
 
 def _terms(v_vals, lv_vals, h_vals, spec):
-    v = np.clip(np.asarray(v_vals, dtype=np.float64), -1e30, 1e30)
-    lv = np.clip(np.asarray(lv_vals, dtype=np.float64), -1e30, 1e30)
+    v_raw = np.asarray(v_vals, dtype=np.float64)
+    lv_raw = np.asarray(lv_vals, dtype=np.float64)
     h = np.asarray(h_vals, dtype=np.float64)
-    if not (np.all(np.isfinite(v)) and np.all(np.isfinite(lv))):
+    # Check finiteness on RAW inputs before clipping
+    if not (np.all(np.isfinite(v_raw)) and np.all(np.isfinite(lv_raw))):
         return None
+    v = np.clip(v_raw, -1e30, 1e30)
+    lv = np.clip(lv_raw, -1e30, 1e30)
     mask = (h > spec["R"]).astype(np.float64)
     drift_viol = np.mean(np.maximum(lv + phi_vals(v, spec["alpha"], spec["c"]), 0.0) * mask)
     pos_viol = np.mean(np.maximum(1.0 - v, 0.0))

@@ -48,3 +48,22 @@ def test_fl_violation_unweighted():
     spec = {"alpha": 1, "c": 0.05, "R": 10.0}
     v = np.array([0.0]); lv = np.array([-100.0]); h = np.array([0.0])
     assert np.isclose(fl_violation(v, lv, h, spec), 1.0)  # no 2.5 weight
+
+
+def test_fl_penalty_inf_guard():
+    spec = {"alpha": 1, "c": 0.05, "R": 10.0}
+    assert fl_penalty(np.array([2.0]), np.array([-np.inf]),
+                      np.array([20.0]), spec) >= 1e6
+    assert fl_penalty(np.array([np.inf]), np.array([0.0]),
+                      np.array([20.0]), spec) >= 1e6
+
+
+def test_fl_penalty_multielement_mean():
+    spec = {"alpha": 1, "c": 0.05, "R": 10.0}
+    # two points outside K_R: one violates drift by exactly (1+phi(1))=1.025,
+    # one satisfies it; positivity satisfied everywhere (v=1 -> relu(1-v)=0).
+    v = np.array([1.0, 1.0])
+    lv = np.array([1.0, -100.0])
+    h = np.array([20.0, 20.0])
+    expected = (max(1.0 + 0.025, 0.0) + 0.0) / 2.0     # mean over BOTH points
+    assert np.isclose(fl_penalty(v, lv, h, spec), expected)
