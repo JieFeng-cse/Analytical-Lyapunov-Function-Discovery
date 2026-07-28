@@ -334,6 +334,25 @@ def optomize_at_test(
     ## Set Training Dataset Parameters
     counter_example_size = Program.task.X_train.shape[0]
 
+    # Path-consistency guard: FL_SPEC (module-level import of config.generator_spec)
+    # and the task metric must agree; otherwise the FL branches below would run
+    # against the deterministic reward (or vice versa).
+    _metric = config["task"].get("metric")
+    if (FL_SPEC is not None) != (_metric == "foster_lyapunov"):
+        raise RuntimeError(
+            "Foster-Lyapunov path inconsistency: generator_spec() is "
+            f"{'defined' if FL_SPEC is not None else 'NOT defined'} in the active config "
+            f"but task metric is {_metric!r}. An FL config must provide generator_spec() "
+            "AND metric='foster_lyapunov'; a deterministic config must provide neither.")
+
+    # FL mode accumulators (analogue of the deterministic X_test counterexample
+    # store): a pristine copy of the base training set plus a persistent pool of
+    # harvested violators that X_train is re-bootstrapped from each epoch.
+    fl_X_base = Program.task.X_train.copy() if FL_SPEC is not None else None
+    fl_pool = []
+    FL_POOL_CAP = 5000
+    FL_HARVEST_TOP_K = 60
+
     conf = get_config()
     benchmark_df = pd.read_csv(conf.exp.benchmark_path, index_col=0, encoding="ISO-8859-1")
     row = benchmark_df.loc[config["task"]["dataset"]]
@@ -419,22 +438,12 @@ def optomize_at_test(
                     else:
                         pgd_example = j[1]
         else:
-            # FL mode: harvest top-k violators of the drift condition by random
-            # search (torch-PGD is unsafe on log/exp objectives; see spec).
-            from utils.fl_reward import fl_harvest
-            sv, dr = dynamics()
+            # FL mode: violator harvesting (torch-PGD is unsafe on log/exp
+            # objectives; see spec) needs this epoch's rewards to pick the top-K
+            # programs, so it runs after the reward computation, together with the
+            # counterexample-pool rebuild of X_train further below. Nothing is
+            # appended here: the pool rebuild IS the augmentation.
             pgd_example = []
-            for prog in [i for i in programs if (not i.invalid)]:
-                try:
-                    pts = fl_harvest(prog.sympy_expr[0], sv, dr, FL_SPEC,
-                                     low_bound, up_bound, n_pts=100_000, k=50,
-                                     seed=epoch)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    continue
-                if len(pgd_example) > 0:
-                    pgd_example = np.concatenate((pgd_example, pts), axis = 0)
-                else:
-                    pgd_example = pts
 
         ratio = 0.2
         if len(pgd_example) > Program.task.X_train.shape[0] * ratio:
@@ -451,7 +460,12 @@ def optomize_at_test(
         # Compute rewards (or retrieve cached rewards)
         r = np.array([p.update_r() for p in programs])
         r_train = r
-        
+
+        if FL_SPEC is not None:
+            # Snapshot the full (pre-quantile-filter) batch + rewards for the FL
+            # harvest below, which selects the top-K programs of the whole batch.
+            fl_programs_all, fl_r_all = list(programs), r
+
         del Program.task.X_train, Program.task.y_train
         Program.task.X_train = temp
         Program.task.y_train = np.zeros(Program.task.X_train.shape[0])
@@ -642,10 +656,54 @@ def optomize_at_test(
 
             del counter_example
         else:
-            # FL mode: no origin-anchored SHGO harvesting. Random-search
-            # violators (above) already augment X_train each epoch, and SHGO
-            # runs in the final falsifier gate below.
-            pass
+            # FL mode: the deterministic SHGO counterexample feedback is replaced
+            # by a persistent pool of random-search violators. Harvest the worst
+            # points of this epoch's top-K programs (rewards are known now), push
+            # them into the pool, then rebuild X_train as a bootstrap of the
+            # pristine base set mixed with <=10% pool rows -- the same idiom as
+            # the deterministic rebuild above. SHGO still runs in the final gate.
+            from utils.fl_reward import fl_harvest
+            sv, dr = dynamics()
+            order = np.argsort(fl_r_all)[::-1]
+            top_idx = [int(i) for i in order
+                       if not fl_programs_all[int(i)].invalid][:FL_HARVEST_TOP_K]
+
+            n_ok, n_fail = 0, 0
+            first_err = None
+            for i in top_idx:
+                prog = fl_programs_all[i]
+                try:
+                    pts = fl_harvest(prog.sympy_expr[0], sv, dr, FL_SPEC,
+                                     low_bound, up_bound, n_pts=100_000, k=50,
+                                     seed=epoch, lv_expr=prog.sympy_expr_generator)
+                except Exception as exc:  # pylint: disable=broad-exception-caught
+                    n_fail += 1
+                    if first_err is None:
+                        first_err = repr(exc)
+                    continue
+                n_ok += 1
+                fl_pool.extend(np.asarray(pts, dtype=fl_X_base.dtype))
+
+            if len(fl_pool) > FL_POOL_CAP:                       # FIFO cap
+                del fl_pool[: len(fl_pool) - FL_POOL_CAP]
+
+            log_and_print(f"[FL harvest] epoch={epoch} harvested={n_ok} "
+                          f"failed={n_fail} pool={len(fl_pool)}")
+            if first_err is not None:
+                log_and_print(f"[FL harvest] epoch={epoch} first failure: {first_err}")
+
+            # Rebuild X_train: 90% bootstrap of the pristine base set + <=10% pool.
+            n_rows = fl_X_base.shape[0]
+            n_pool = min(int(0.1 * n_rows), len(fl_pool))
+            n_base = n_rows - n_pool
+            parts = [fl_X_base[np.random.randint(0, fl_X_base.shape[0], n_base)]]
+            if n_pool > 0:
+                pool_arr = np.asarray(fl_pool, dtype=fl_X_base.dtype)
+                parts.append(pool_arr[np.random.randint(0, pool_arr.shape[0], n_pool)])
+            Program.task.X_train = np.vstack(parts).astype(fl_X_base.dtype, copy=False)
+            Program.task.y_train = np.zeros(Program.task.X_train.shape[0])
+            log_and_print(f"[FL pool] epoch={epoch} X_train={Program.task.X_train.shape} "
+                          f"base_rows={n_base} pool_rows={n_pool}")
 
         ## Evaluate if any output expression is numerically valid
         if eval_all:

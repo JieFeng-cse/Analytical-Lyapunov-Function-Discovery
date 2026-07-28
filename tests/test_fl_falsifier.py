@@ -30,3 +30,36 @@ def test_harvest_shape():
     pts = fl_harvest(V, sv, drift, spec, [-3.14, -6, -6], [3.14, 6, 6],
                      n_pts=5000, k=10, seed=1)
     assert pts.shape == (10, 3)
+
+
+def test_objective_fns_accepts_precomputed_lv():
+    import sympy as sym
+    from utils.fl_reward import fl_objective_fns, generator_expr
+    sv, drift, spec = make_rotor(2)
+    V = 1 + spec["H"]
+    lv = generator_expr(V, sv, drift, spec["noise"])
+    v_fn, lv_fn, h_fn = fl_objective_fns(V, sv, drift, spec, lv_expr=lv)
+    x = np.array([[0.5, 1.0, 2.0]])
+    args = [x[:, i] for i in range(3)]
+    direct = sym.lambdify(sv, lv, "numpy")(*args)
+    assert np.allclose(lv_fn(*args), direct)
+
+
+def test_pointwise_violation_perpoint_nonfinite():
+    from utils.fl_reward import fl_objective_fns, _pointwise_violation
+    sv, drift, spec = make_rotor(2)
+    V = sv[1] ** 2 + sv[2] ** 2 + 0 * sv[0] + 1   # 1+p1^2+p2^2, finite everywhere
+    v_fn, lv_fn, h_fn = fl_objective_fns(V, sv, drift, spec)
+    X = np.array([[0.0, 5.0, 5.0], [0.0, 5.0, 5.0]])
+    base = _pointwise_violation(v_fn, lv_fn, h_fn, X, spec)
+    assert np.all(np.isfinite(base))
+
+    # inject a non-finite V at point 0 only via a wrapper fn
+    def bad_v(*a):
+        out = np.asarray(v_fn(*a), dtype=float).copy()
+        out = np.broadcast_to(out, (X.shape[0],)).copy()
+        out[0] = np.inf
+        return out
+
+    viol = _pointwise_violation(bad_v, lv_fn, h_fn, X, spec)
+    assert viol[0] >= 1e6 and np.isfinite(viol[1]) and viol[1] < 1e6

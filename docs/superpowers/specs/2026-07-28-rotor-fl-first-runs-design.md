@@ -75,6 +75,24 @@ test sample, then the adapted falsifier passes: SHGO (penalty-masked) plus
 harvesting appends top-50 random-search violators per epoch. Coercivity and periodicity are
 NOT checked in-loop; they are offline post-hoc checks on the winning expressions.
 
+Two further deviations from the deterministic path in `utils/train.py`:
+
+1. **Counterexample feedback.** FL mode replaces the deterministic SHGO
+   counterexample-feedback block (SHGO per surviving program → append to `X_test` →
+   rebuild `X_train`) with a harvest-pool bootstrap. Each epoch, after rewards are
+   known, the top-60 non-invalid programs by reward are harvested (top-50
+   random-search violators each, reusing the cached `Program.sympy_expr_generator`
+   so LV is not re-differentiated); the harvested rows are appended to a persistent
+   pool capped at 5000 rows (FIFO). `X_train` is then rebuilt as a bootstrap
+   resample of the pristine base training set for ≥90% of its rows plus up to 10%
+   of rows sampled from the pool (fewer while the pool is still small), preserving
+   the base set's shape and dtype. One log line per epoch reports how many programs
+   were harvested successfully, how many raised, and the pool size.
+2. **Final-gate strength.** SHGO with `n=512, iters=2` is weak in ≥7-D, so for
+   rotor4/rotor5 the final gate is effectively dominated by the 10×10⁶-point random
+   sampling stage. Accepted for this round; a stronger (or SMT-based) gate is
+   deferred.
+
 ## Grammar and priors
 
 - function_set: `["add","sub","mul","div","sin","cos","exp","n2"]` (`exp` required by
