@@ -599,6 +599,15 @@ class Program(object):
         
         return lie_derivative
 
+    @cached_property
+    def sympy_expr_generator(self):
+        """Full stochastic generator LV for Foster-Lyapunov tasks (spec 2026-07-28)."""
+        from config import dynamics, generator_spec
+        from utils.fl_reward import generator_expr
+        state_variables, dynamics_ode = dynamics()
+        return generator_expr(self.sympy_expr[0], state_variables,
+                              dynamics_ode, generator_spec()["noise"])
+
 
     def pretty(self):
         """Returns pretty printed string of the program"""

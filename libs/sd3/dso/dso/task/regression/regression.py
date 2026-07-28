@@ -149,6 +149,7 @@ class RegressionTask(HierarchicalTask):
         Configure train/test reward metrics.
         """
         self.threshold = threshold
+        self.metric_name = metric
         self.metric, self.invalid_reward, self.max_reward = make_regression_metric(
             metric, self.y_train, *metric_params)
         self.extra_metric_test = extra_metric_test
@@ -189,6 +190,9 @@ class RegressionTask(HierarchicalTask):
         self.stochastic = reward_noise > 0.0
 
     def reward_function(self, p):
+
+        if self.metric_name == "foster_lyapunov":
+            return self._fl_reward(p)
 
         # Compute estimated values
         y_hat = p.execute(self.X_train)
@@ -239,9 +243,51 @@ class RegressionTask(HierarchicalTask):
                 r /= np.sqrt(1 + 12 * self.scale ** 2)
 
         return r
-    
-    
+
+    def _fl_reward(self, p):
+        import sympy as sym_
+        from config import dynamics, generator_spec
+        from utils.fl_reward import fl_penalty
+        state_vars, _ = dynamics()
+        spec = generator_spec()
+        y_hat = p.execute(self.X_train)
+        if p.invalid:
+            return self.invalid_reward
+        used = p.sympy_expr[0].free_symbols
+        if len(used) < len(state_vars):
+            return self.invalid_reward
+        try:
+            args = [self.X_train[:, i] for i in range(self.X_train.shape[1])]
+            lv_vals = sym_.lambdify(state_vars, p.sympy_expr_generator, "numpy")(*args)
+            h_vals = sym_.lambdify(state_vars, spec["H"], "numpy")(*args)
+            lv_vals = np.broadcast_to(np.asarray(lv_vals, dtype=np.float64), y_hat.shape)
+        except Exception:
+            return self.invalid_reward
+        return 1.0 / (1.0 + fl_penalty(y_hat, lv_vals, h_vals, spec))
+
     def evaluate(self, p):
+
+        if self.metric_name == "foster_lyapunov":
+            import sympy as sym_
+            from config import dynamics, generator_spec
+            from utils.fl_reward import fl_violation
+            state_vars, _ = dynamics()
+            spec = generator_spec()
+            y_hat = p.execute(self.X_test)
+            if p.invalid or len(p.sympy_expr[0].free_symbols) < len(state_vars):
+                nmse_test = 1e6
+            else:
+                try:
+                    args = [self.X_test[:, i] for i in range(self.X_test.shape[1])]
+                    lv = sym_.lambdify(state_vars, p.sympy_expr_generator, "numpy")(*args)
+                    h = sym_.lambdify(state_vars, spec["H"], "numpy")(*args)
+                    lv = np.broadcast_to(np.asarray(lv, dtype=np.float64), y_hat.shape)
+                    nmse_test = fl_violation(y_hat, lv, h, spec)
+                except Exception:
+                    nmse_test = 1e6
+            success = nmse_test < self.threshold
+            return {"nmse_test": nmse_test, "nmse_test_noiseless": nmse_test,
+                    "success": success}
 
         def relu(x):
             return x * (x > 0)
@@ -332,7 +378,12 @@ def make_regression_metric(name, y_train, *args):
         # Range: [0, 1]
         "lyapunov_risk":(lambda y, y_hat: 1 / (1.0+ (2.5 * np.mean(relu(-(y_hat-0.05))) + np.mean(relu(y+0.2))) * (1)),
                     1),
-    
+
+        # Foster-Lyapunov: never invoked directly (reward_function/evaluate
+        # branch on self.metric_name before reaching self.metric); placeholder
+        # so make_regression_metric's lookup does not KeyError.
+        "foster_lyapunov": (lambda y, y_hat: 0.0, 1),
+
     }
 
     assert name in all_metrics, "Unrecognized reward function name."
