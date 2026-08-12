@@ -23,10 +23,15 @@ def _terms(v_vals, lv_vals, h_vals, spec):
     # Check finiteness on RAW inputs before clipping
     if not (np.all(np.isfinite(v_raw)) and np.all(np.isfinite(lv_raw))):
         return None
-    v = np.clip(v_raw, -1e30, 1e30)
-    lv = np.clip(lv_raw, -1e30, 1e30)
+    v = np.clip(v_raw, -1e300, 1e300)
+    lv = np.clip(lv_raw, -1e300, 1e300)
     mask = (h > spec["R"]).astype(np.float64)
-    drift_viol = np.mean(np.maximum(lv + phi_vals(v, spec["alpha"], spec["c"]), 0.0) * mask)
+    # Normalize over the points OUTSIDE K_R only. Dividing by the total count
+    # would dilute the drift penalty as R grows (masked points contribute 0 to
+    # the numerator but stay in the denominator), implicitly coupling R to the
+    # effective penalty strength.
+    n_out = max(float(mask.sum()), 1.0)
+    drift_viol = float(np.sum(np.maximum(lv + phi_vals(v, spec["alpha"], spec["c"]), 0.0) * mask) / n_out)
     pos_viol = np.mean(np.maximum(1.0 - v, 0.0))
     return drift_viol, pos_viol
 
@@ -63,8 +68,8 @@ def _pointwise_violation(v_fn, lv_fn, h_fn, X, spec):
     v_raw = np.broadcast_to(np.asarray(v_fn(*args), dtype=np.float64), (X.shape[0],))
     lv_raw = np.broadcast_to(np.asarray(lv_fn(*args), dtype=np.float64), (X.shape[0],))
     bad = ~(np.isfinite(v_raw) & np.isfinite(lv_raw))
-    v = np.clip(v_raw, -1e30, 1e30)
-    lv = np.clip(lv_raw, -1e30, 1e30)
+    v = np.clip(v_raw, -1e300, 1e300)
+    lv = np.clip(lv_raw, -1e300, 1e300)
     h = np.broadcast_to(np.asarray(h_fn(*args), dtype=np.float64), (X.shape[0],))
     viol = np.maximum(lv + phi_vals(v, spec["alpha"], spec["c"]), 0.0) * (h > spec["R"])
     viol = viol + np.maximum(1.0 - v, 0.0)
@@ -74,8 +79,8 @@ def _pointwise_violation(v_fn, lv_fn, h_fn, X, spec):
 
 
 def fl_random_falsify(V, state_vars, drift, spec, low, high,
-                      n_rounds=10, n_pts=1_000_000, seed=0):
-    v_fn, lv_fn, h_fn = fl_objective_fns(V, state_vars, drift, spec)
+                      n_rounds=10, n_pts=1_000_000, seed=0, lv_expr=None):
+    v_fn, lv_fn, h_fn = fl_objective_fns(V, state_vars, drift, spec, lv_expr=lv_expr)
     rng = np.random.default_rng(seed)
     worst_pt, worst_val = None, 0.0
     for _ in range(n_rounds):
@@ -88,15 +93,15 @@ def fl_random_falsify(V, state_vars, drift, spec, low, high,
     return ok, (None if ok else worst_pt)
 
 
-def fl_shgo_falsify(V, state_vars, drift, spec, low, high):
+def fl_shgo_falsify(V, state_vars, drift, spec, low, high, lv_expr=None):
     from scipy.optimize import shgo, Bounds
-    v_fn, lv_fn, h_fn = fl_objective_fns(V, state_vars, drift, spec)
+    v_fn, lv_fn, h_fn = fl_objective_fns(V, state_vars, drift, spec, lv_expr=lv_expr)
 
     def neg_obj(x):
         X = x.reshape(1, -1)
         args = [X[:, i] for i in range(X.shape[1])]
-        v = float(np.clip(v_fn(*args), -1e30, 1e30))
-        lv = float(np.clip(lv_fn(*args), -1e30, 1e30))
+        v = float(np.clip(v_fn(*args), -1e300, 1e300))
+        lv = float(np.clip(lv_fn(*args), -1e300, 1e300))
         h = float(h_fn(*args))
         drift_v = max(lv + float(phi_vals(np.array([v]), spec["alpha"], spec["c"])[0]), 0.0)
         drift_v -= 1e3 * max(spec["R"] - h, 0.0)          # penalty masking inside K_R

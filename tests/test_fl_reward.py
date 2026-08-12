@@ -30,6 +30,18 @@ def test_fl_penalty_masks_inside_KR():
     assert pen_half > 0.0
 
 
+def test_fl_penalty_not_diluted_by_inside_KR_points():
+    # Adding points inside K_R must not shrink the drift penalty (the mean is
+    # taken over outside-K_R points only, so R and penalty strength decouple).
+    spec = {"alpha": 1, "c": 0.05, "R": 10.0}
+    v_out = np.array([2.0]); lv_out = np.array([5.0]); h_out = np.array([20.0])
+    base = fl_penalty(v_out, lv_out, h_out, spec)
+    v_mix = np.array([2.0, 2.0, 2.0, 2.0])
+    lv_mix = np.array([5.0, -1.0, -1.0, -1.0])
+    h_mix = np.array([20.0, 1.0, 1.0, 1.0])   # 3 extra points inside K_R
+    assert np.isclose(fl_penalty(v_mix, lv_mix, h_mix, spec), base)
+
+
 def test_fl_penalty_positivity_term():
     spec = {"alpha": 1, "c": 0.05, "R": 10.0}
     v = np.array([0.0])                # V below 1 everywhere

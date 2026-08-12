@@ -457,8 +457,16 @@ def optomize_at_test(
         print(f"\n===================Collect {len(pgd_example)} Examples===================\n")
         
         
-        # Compute rewards (or retrieve cached rewards)
-        r = np.array([p.update_r() for p in programs])
+        # Compute rewards (or retrieve cached rewards). update_r() bypasses
+        # Program.r, which is what normally triggers constant optimization, so
+        # programs carrying PlaceholderConstants must be optimized explicitly
+        # first -- otherwise execute() hits constants whose value is still None.
+        def _reward_of(p):
+            if getattr(p, "const_pos", None):
+                p.optimize()
+            return p.update_r()
+
+        r = np.array([_reward_of(p) for p in programs])
         r_train = r
 
         if FL_SPEC is not None:
@@ -664,7 +672,13 @@ def optomize_at_test(
             # the deterministic rebuild above. SHGO still runs in the final gate.
             from utils.fl_reward import fl_harvest
             sv, dr = dynamics()
-            order = np.argsort(fl_r_all)[::-1]
+            if FL_SPEC.get("stage"):
+                # Stage mode (C10): the residual objective has no counterexample
+                # notion yet -- keep the pristine training set. (Possible later:
+                # harvest worst-residual points.)
+                order = np.array([], dtype=int)
+            else:
+                order = np.argsort(fl_r_all)[::-1]
             top_idx = [int(i) for i in order
                        if not fl_programs_all[int(i)].invalid][:FL_HARVEST_TOP_K]
 
@@ -673,9 +687,16 @@ def optomize_at_test(
             for i in top_idx:
                 prog = fl_programs_all[i]
                 try:
-                    pts = fl_harvest(prog.sympy_expr[0], sv, dr, FL_SPEC,
+                    from utils.fl_scaffold import fl_V_and_LV
+                    V_h, LV_h, ok_h = fl_V_and_LV(
+                        prog.sympy_expr[0], FL_SPEC, sv, dr,
+                        lv_expr=None if FL_SPEC.get("scaffold") is not None
+                        else prog.sympy_expr_generator)
+                    if not ok_h:
+                        continue
+                    pts = fl_harvest(V_h, sv, dr, FL_SPEC,
                                      low_bound, up_bound, n_pts=100_000, k=50,
-                                     seed=epoch, lv_expr=prog.sympy_expr_generator)
+                                     seed=epoch, lv_expr=LV_h)
                 except Exception as exc:  # pylint: disable=broad-exception-caught
                     n_fail += 1
                     if first_err is None:
@@ -692,18 +713,25 @@ def optomize_at_test(
             if first_err is not None:
                 log_and_print(f"[FL harvest] epoch={epoch} first failure: {first_err}")
 
-            # Rebuild X_train: 90% bootstrap of the pristine base set + <=10% pool.
-            n_rows = fl_X_base.shape[0]
-            n_pool = min(int(0.1 * n_rows), len(fl_pool))
-            n_base = n_rows - n_pool
-            parts = [fl_X_base[np.random.randint(0, fl_X_base.shape[0], n_base)]]
-            if n_pool > 0:
-                pool_arr = np.asarray(fl_pool, dtype=fl_X_base.dtype)
-                parts.append(pool_arr[np.random.randint(0, pool_arr.shape[0], n_pool)])
-            Program.task.X_train = np.vstack(parts).astype(fl_X_base.dtype, copy=False)
-            Program.task.y_train = np.zeros(Program.task.X_train.shape[0])
-            log_and_print(f"[FL pool] epoch={epoch} X_train={Program.task.X_train.shape} "
-                          f"base_rows={n_base} pool_rows={n_pool}")
+            if FL_SPEC.get("stage"):
+                # Stage mode: keep X_train pristine and FIXED. The bootstrap
+                # resample would change the point set every epoch, adding reward
+                # noise and invalidating the fast-path field cache.
+                Program.task.X_train = fl_X_base
+                Program.task.y_train = np.zeros(fl_X_base.shape[0])
+            else:
+                # Rebuild X_train: 90% bootstrap of the pristine base set + <=10% pool.
+                n_rows = fl_X_base.shape[0]
+                n_pool = min(int(0.1 * n_rows), len(fl_pool))
+                n_base = n_rows - n_pool
+                parts = [fl_X_base[np.random.randint(0, fl_X_base.shape[0], n_base)]]
+                if n_pool > 0:
+                    pool_arr = np.asarray(fl_pool, dtype=fl_X_base.dtype)
+                    parts.append(pool_arr[np.random.randint(0, pool_arr.shape[0], n_pool)])
+                Program.task.X_train = np.vstack(parts).astype(fl_X_base.dtype, copy=False)
+                Program.task.y_train = np.zeros(Program.task.X_train.shape[0])
+                log_and_print(f"[FL pool] epoch={epoch} X_train={Program.task.X_train.shape} "
+                              f"base_rows={n_base} pool_rows={n_pool}")
 
         ## Evaluate if any output expression is numerically valid
         if eval_all:
@@ -715,21 +743,38 @@ def optomize_at_test(
                 else:
                     # FL mode final falsifier: random search (10 x 1e6 pts) then
                     # penalty-masked SHGO on max(LV + phi(V)) outside K_R.
+                    # Verification runs on the OVERSIZED box (momenta x2, angles
+                    # unchanged) per CONCLUSIONS C2/C6 -- verify may never be
+                    # looser than reward, and the tail cheats live outside the
+                    # training box.
                     from utils.fl_reward import fl_random_falsify, fl_shgo_falsify
+                    from utils.fl_scaffold import fl_V_and_LV
                     sv, dr = dynamics()
+                    n_ang = (len(sv) + 1) // 2 - 1
+                    fals_low = np.array([b if j < n_ang else 2.0 * b
+                                         for j, b in enumerate(low_bound)])
+                    fals_up = np.array([b if j < n_ang else 2.0 * b
+                                        for j, b in enumerate(up_bound)])
                     overall_check = []
                     for i in range(len(success)):
                         if not success[i]:
                             overall_check.append(False)
                             continue
-                        V = programs[i].sympy_expr[0]
+                        V, LV_i, ok_i = fl_V_and_LV(
+                            programs[i].sympy_expr[0], FL_SPEC, sv, dr,
+                            lv_expr=None if FL_SPEC.get("scaffold") is not None
+                            else programs[i].sympy_expr_generator)
+                        if not ok_i:
+                            overall_check.append(False)
+                            continue
                         try:
                             ok_rand, worst = fl_random_falsify(V, sv, dr, FL_SPEC,
-                                                               low_bound, up_bound,
+                                                               fals_low, fals_up,
                                                                n_rounds=10, n_pts=1_000_000,
-                                                               seed=i)
+                                                               seed=i, lv_expr=LV_i)
                             ok_shgo = fl_shgo_falsify(V, sv, dr, FL_SPEC,
-                                                      low_bound, up_bound) if ok_rand else False
+                                                      fals_low, fals_up,
+                                                      lv_expr=LV_i) if ok_rand else False
                         except Exception as exc:  # pylint: disable=broad-exception-caught
                             log_and_print(f"[FL final check] i={i} falsifier error: {exc}")
                             overall_check.append(False)

@@ -216,8 +216,10 @@ $$d\tilde p_2 = \Big(-\frac{1}{\tilde p_2^{\,3}} + O_f(\tilde p_2^{-4})\Big)dt
  + \Big(-\frac{\sqrt2\cos r_1}{\tilde p_2^{\,2}} + O_f(\tilde p_2^{-3})\Big)dB^1_t
  + \Big(-\frac{2\cos r_2}{\tilde p_2^{\,2}} + O_f(\tilde p_2^{-3})\Big)dB^3_t. \tag{23}$$
 
-> ⚠ The drift numerator in (23) was garbled in the source extraction (the fragments are
-> consistent with $-1/\tilde p_2^{\,3}$); verify against [2] before coding the falsifier.
+> ⚠ resolved 2026-08-04: a second verbatim extraction supplied by the user
+> (2026-07-27-rotor-fl-benchmarks-original-extraction.txt) reads "− 1 p 3 2" here,
+> confirming $-1/\tilde p_2^{\,3}$ for $N=3$ (vs $-1/(2\tilde p_2^{\,3})$ in (18) for
+> $N=2$). Cross-checking against [2] remains a nice-to-have, no longer a blocker.
 
 As in $N=2$, the fast-branch expression is smoothly extended where $\rho_3=0$. Constants
 $a_1,a_2>0$:

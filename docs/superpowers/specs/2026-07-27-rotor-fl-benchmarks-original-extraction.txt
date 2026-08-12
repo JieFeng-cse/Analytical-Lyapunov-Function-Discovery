@@ -1,0 +1,647 @@
+Provenance: verbatim PDF text extraction of the benchmark draft, supplied by the user
+(chongwei) in a Claude Code session on 2026-08-04. This is the source-of-truth extraction
+behind the reconstructed transcription in
+2026-07-27-rotor-chain-foster-lyapunov-benchmarks.md. Formulas are garbled by the PDF
+extractor (superscripts/subscripts flattened); consult the transcription for readable
+LaTeX, and this file to arbitrate any reconstruction doubt. Notably this extraction
+corroborates the eq.(23) drift numerator as -1/p~2^3 (N=3), vs -1/(2 p~2^3) in eq.(18)
+(N=2).
+
+----------------------------------------------------------------------
+
+Benchmark Problems for Symbolic Foster–Lyapunov Discovery
+in Boundary-Thermostatted Rotor Chains
+July 27, 2026
+1 Common setup
+1.1 Hamiltonian rotor chain
+For N ≥ 2, let
+q = (q1, . . . , qN ) ∈ T
+N , p = (p1, . . . , pN ) ∈ R
+N ,
+Here T = R/(2πZ) denotes the one-dimensional torus: angles that differ by an integer multiple of
+2π represent the same rotor position. Thus T
+N is the Cartesian product of N circles, and every qi
+is understood modulo 2π; pi
+is its conjugate momentum. Define the bond variables
+ri = qi+1 − qi (mod 2π), i = 1, . . . , N − 1,
+and consider the Hamiltonian
+HN (q, p) = 1
+2
+X
+N
+i=1
+p
+2
+i +
+N
+X−1
+i=1
+Wi(ri). (1)
+The general theory allows smooth, periodic, non-degenerate interactions. To make the four benchmarks directly comparable, we fix
+Wi(r) = W(r) = 1 − cos r, w(r) = W′
+(r) = sin r. (2)
+Adding the constant 1 to − cos r does not change the dynamics, but makes HN ≥ 0.
+1.2 Endpoint Langevin baths
+For N ≥ 3, only rotors 1 and N are coupled to heat baths. We use the concrete parameters
+γ1 = γN = 1, T1 = 1, TN = 2, (3)
+and zero external torques. The stochastic dynamics are
+dqi = pi dt, i = 1, . . . , N, (4a)
+dp1 =
+
+w(r1) − p1
+
+dt +
+√
+2 dB
+1
+t
+, (4b)
+dpi =
+
+w(ri) − w(ri−1)
+
+dt, i = 2, . . . , N − 1, (4c)
+dpN =
+
+−w(rN−1) − pN
+
+dt + 2 dB
+N
+t
+, (4d)
+1
+where B1 and BN are independent standard Brownian motions. More generally, the noise coefficient
+at endpoint b is √
+2γbTb.
+Let Fi(q) = −∂qiHN (q, p). The infinitesimal generator acting on a C
+2
+function f is
+LN f =
+X
+N
+i=1
+(pi∂qi
+f + Fi(q)∂pi
+f) − p1∂p1
+f − pN ∂pN
+f + ∂p1p1
+f + 2∂pN pN
+f. (5)
+In particular,
+LN HN = (1 − p
+2
+1
+) + (2 − p
+2
+N ). (6)
+Thus HN alone does not detect energy trapped in the undamped interior rotors and is not a sufficient
+Foster–Lyapunov function.
+1.3 One-bath N = 2 specialization
+The baby benchmark is deliberately not obtained by identifying the two endpoints in (4). Instead,
+only rotor 1 is thermostatted, with γ1 = T1 = 1, and rotor 2 has neither friction nor noise:
+dqi = pi dt, i = 1, 2, (7a)
+dp1 =
+
+w(r1) − p1
+
+dt +
+√
+2 dB
+1
+t
+, (7b)
+dp2 = −w(r1) dt. (7c)
+Its generator is
+L2f = p1∂q1
+f + p2∂q2
+f + w(r1)(∂p1 − ∂p2
+)f − p1∂p1
+f + ∂p1p1
+f, (8)
+and
+L2H2 = 1 − p
+2
+1
+. (9)
+Thus the unthermostatted second rotor creates the same fast-rotor obstruction as an interior rotor
+in a longer chain.
+1.4 Target certificate
+For R > 0, let
+KR = {(q, p) : HN (q, p) ≤ R}.
+The model must generate an explicit, periodic-in-q, C
+2
+function
+VN : T
+N × R
+N −→ [1, ∞)
+with compact sublevel sets, together with constants c, C, R > 0, such that
+LN VN ≤ C1KR − ϕN (VN ) on T
+N × R
+N . (10)
+We use the parametric drift family
+ϕα,c(v) = c
+v
+(α + 1 + log v)
+α
+, v ≥ 1. (11)
+The offset α + 1 makes this representative increasing and concave on [1, ∞); its precise value is
+otherwise inessential. The significant feature is the large-v behavior v/(log v)
+α.
+These are stochastic Foster–Lyapunov problems. Therefore the reward and falsification code
+must evaluate the full generator (8) or (5), including the second derivatives in every noisy momentum
+(one for N = 2 and two for N ≥ 3). Replacing LN V by the first-order Lie derivative would define
+a different problem.
+2
+N state dimension status target α associated rate
+2 4 proved 1 exp(−ct1/2
+)
+3 6 proved 1 exp(−ct1/2
+)
+4 8 proved 1 exp(−ct1/2
+)
+5 10 conjectural 3 exp(−ct1/4
+)
+2 The four testing problems
+Testing problem 1 (N = 2: one fast unthermostatted rotor). Use the one-bath dynamics (7).
+Explicitly,
+H2 =
+1
+2
+(p
+2
+1 + p
+2
+2
+) + (1 − cos(q2 − q1)),
+dp1 =
+
+sin(q2 − q1) − p1
+
+dt +
+√
+2 dB
+1
+t
+,
+dp2 = − sin(q2 − q1) dt.
+Find a globally C
+2
+, coercive V2 and c, C, R > 0 such that
+L2V2 ≤ C1KR − c
+V2
+2 + log V2
+. (12)
+The output must be periodic in (q1, q2) and coercive in (p1, p2), including along the fast unthermostatted direction |p2| → ∞ with p1 bounded.
+Known reference information. Cuneo and Poquet study precisely this two-rotor, one-bath
+model and prove that the stretched-exponential scale exp(−ct1/2
+) cannot be improved [1]. They
+also observe that the matching upper bound follows from the three-rotor Foster–Lyapunov proof
+by omitting the third rotor [2]. The resulting one-branch reference construction has, for sufficiently
+small 0 < θ < 1, the structure
+V
+ref
+2 = 1 + eθH2 + Aρ2(p) pe
+2
+2
+exp
+θ
+2
+pe
+2
+2
+
+, (13)
+We fix the gate explicitly. Let
+b(u) = (
+0, u ≤ 0,
+exp(−1/u), u > 0,
+χ(z) = b(z − 1)
+b(z − 1) + b(4 − z)
+. (14)
+Thus χ(z) = 0 for z ≤ 1 and χ(z) = 1 for z ≥ 4. Taking k = 2 and Rρ = 4, define
+S2(p1) = p
+4
+1 + 4, ρ2(p1, p2) = χ
+
+p
+2
+2
+S2(p1)
+2
+
+. (15)
+In particular, ρ2 = 0 when |p2| ≤ p
+4
+1 + 4, and ρ2 = 1 when |p2| ≥ 2(p
+4
+1 + 4). To regularize the inverse
+powers appearing below, set
+Ij (p1, p2) = (
+ρ2(p1, p2)/pj
+2
+, p2 ̸= 0,
+0, p2 = 0,
+j = 1, . . . , 4. (16)
+3
+Each Ij is globally C∞, since ρ2 vanishes on a neighborhood of p2 = 0. The corrected fast momentum is obtained by averaging the oscillatory interaction force. With the regularization above, one
+concrete normal form for the cosine benchmark is
+pe2 = p2 − (cos r1)I1 − (p1 cos r1)I2
+− (p
+2
+1
+cos r1 + p1 sin r1 + cos2
+r1)I3
++ (−p
+3
+1
+cos r1 − 3p
+2
+1
+sin r1 − 3p1 cos2
+r1 + p1 cos r1 −
+1
+2
+sin r1 cos r1 + 2 sin r1)I4.
+(17)
+On the fully selected fast branch ρ2 = 1, this agrees with the inverse-power normal form and satisfies
+dpe2 =
+
+−
+1
+2p
+3
+2
++ Of(p
+−4
+2
+)
+
+dt
++
+
+−
+√
+2 cos r1
+p
+2
+2
++ Of(p
+−3
+2
+)
+!
+dB
+1
+t
+.
+(18)
+Here and below, Of denotes the weighted fast-region remainders: their coefficients may depend
+polynomially on the thermostatted endpoint momenta but are controlled by the corresponding
+gate. The singular expression (17) has become globally smooth through (16). There are constants
+a1, a2 > 0 such that
+1 + a1e
+θH2 ≤ V
+ref
+2 ≤ a2(1 + p
+2
+2
+)eθH2
+. (19)
+The separate test function constructed explicitly in [1] establishes the lower relaxation bound; it has
+a positive upper drift and should not be confused with the negative-drift Foster–Lyapunov reference
+(13).
+Testing problem 2 (N = 3: one fast interior rotor). Set N = 3 in (1)–(4). Explicitly,
+H3 =
+1
+2
+(p
+2
+1 + p
+2
+2 + p
+2
+3
+) + (1 − cos(q2 − q1)) + (1 − cos(q3 − q2)),
+dp1 =
+
+sin(q2 − q1) − p1
+
+dt +
+√
+2 dB
+1
+t
+,
+dp2 =
+
+sin(q3 − q2) − sin(q2 − q1)
+
+dt,
+dp3 =
+
+− sin(q3 − q2) − p3
+
+dt + 2 dB
+3
+t
+.
+Find V3 and c, C, R > 0 satisfying
+L3V3 ≤ C1KR − c
+V3
+2 + log V3
+. (20)
+The output must be coercive in (p1, p2, p3) and globally C
+2
+.
+Known reference information. This target is rigorous for sufficiently small exponential weight
+θ > 0 [2]. The published construction has the structure
+V
+ref
+3 = 1 + eθH3 + Aρ3(p) pe
+2
+2
+exp
+θ
+2
+pe
+2
+2
+
+, (21)
+where ρ3 is a smooth gate selecting the regime in which |p2| dominates the endpoint momenta, and
+pe2 is a corrected fast momentum whose dynamics become slow after averaging the rapidly oscillating
+forces. For the cosine benchmark, the first two counterterms are explicitly
+pe2 = p2 −
+cos r1 + cos r2
+p2
+−
+p1 cos r1 + p3 cos r2
+p
+2
+2
++ Of(p
+−3
+2
+). (22)
+4
+The higher counterterms in (22) are selected recursively, not arbitrarily, so that on the gated fast
+branch
+dpe2 =
+
+−
+1
+p
+3
+2
++ Of(p
+−4
+2
+)
+
+dt
++
+
+−
+√
+2 cos r1
+p
+2
+2
++ Of(p
+−3
+2
+)
+!
+dB
+1
+t
++
+
+−
+2 cos r2
+p
+2
+2
++ Of(p
+−3
+2
+)
+
+dB
+3
+t
+.
+(23)
+As in the N = 2 case, this fast-branch expression is smoothly extended where ρ3 = 0. The reference
+theorem gives constants a1, a2 > 0 such that
+1 + a1e
+θH3 ≤ V
+ref
+3 ≤ a2(1 + p
+2
+2
+)eθH3
+. (24)
+For a strict blind test, equations (21)–(24) should be withheld from the generator and used only for
+comparison.
+Testing problem 3 (N = 4: two fast interior rotors and resonances). Set N = 4. The interior
+momentum equations are
+dp2 =
+
+sin(q3 − q2) − sin(q2 − q1)
+
+dt,
+dp3 =
+
+sin(q4 − q3) − sin(q3 − q2)
+
+dt,
+with the endpoint equations given by (4). Find a globally C
+2
+, coercive V4 and c, C, R > 0 such that
+L4V4 ≤ C1KR − c
+V4
+2 + log V4
+. (25)
+The certificate must cover all high-energy regimes: only p2 fast, only p3 fast, both fast and nonresonant, and both fast and resonant.
+Known reference information. This target is also rigorous [3]. For any
+0 < θ < min(T
+−1
+1
+, T −1
+4
+) = 1
+2
+,
+the reference construction patches several regime-specific functions:
+V
+ref
+4 = 1 + eθH4 + ψ2(p)V2 + ψ3(p)V3 + Mψc(p)Vc. (26)
+Here ψ2, ψ3, ψc are smooth regime gates. The one-fast-rotor pieces have the asymptotic form
+Vj ≍ exp
+|pej |
+a +
+θ
+2
+pe
+,2
+j
+
+, j = 2, 3, 0 < a < 1,
+whereas the both-fast piece has the form
+Vc ≍ Hece
+θHec
+, Hec ≍
+1
+2
+(p
+2
+2 + p
+2
+3
+).
+The tildes denote averaging and resonance counterterms, not merely a change of notation. The
+resulting global function obeys
+1 + eθH4 ≤ V
+ref
+4 ≤ a3
+
+e
+|p2|
+a
++ e|p3|
+a
+e
+θH4
+(27)
+for some a3 > 0. Again, the reference structure can either be supplied as a grammar prior or
+withheld for a genuinely blind test.
+5
+Testing problem 4 (N = 5: conjectural central-rotor bottleneck). Set N = 5. In addition to the
+endpoint equations, the interior dynamics are
+dp2 =
+
+sin(q3 − q2) − sin(q2 − q1)
+
+dt,
+dp3 =
+
+sin(q4 − q3) − sin(q3 − q2)
+
+dt,
+dp4 =
+
+sin(q5 − q4) − sin(q4 − q3)
+
+dt.
+Find or falsify the existence of a globally C
+2
+, coercive V5 and c, C, R > 0 satisfying the conjectural
+inequality
+L5V5 ≤ C1KR − c
+V5
+(4 + log V5)
+3
+. (28)
+The phrase "find or falsify" is important: failure of a particular symbolic ansatz is not a disproof,
+but an explicit sequence of states along which its drift inequality fails is a useful counterexample for
+further training.
+Conjecture 1 (Benchmark conjecture for N = 5). For the chain above, there are θ, c, C, R > 0 and
+a smooth V5 ≥ 1 with
+log V5 = θH5 + o(H5) as H5 → ∞
+such that (28) holds.
+The exponent 3 is inferred from the conjectured mixing law in [3, Remark 5.3]. If ϕ(v) ≍
+v/(log v)
+α, then
+Hϕ(u) = Z u
+1
+ds
+ϕ(s)
+≍ (log u)
+α+1
+,
+and the corresponding stretched-exponential power is 1/(α + 1). The prediction
+kN =
+1
+2⌈N/2⌉ − 2
+gives k5 = 1/4, hence α = 3.
+One heuristic starting point for the generator is
+V
+ansatz
+5 = 1 + eθH5 + Aψ3(p) pe
+,6
+3
+exp
+θ
+2
+pe
+,2
+3
+
++ corrections for the other fast and resonant regimes.
+(29)
+This ansatz is motivated by the unproved effective scaling
+L5pe3 ∼ −κpe
+−7
+3 =⇒
+L5V5
+V5
+∼ −pe
+−6
+3 ∼ −(log V5)
+−3
+.
+Both the scaling and the required correction terms are conjectural. A serious search must also treat
+high energy shared among (p2, p3), (p3, p4), or (p2, p3, p4), where new resonances can arise.
+3 Suggested evaluation protocol
+For each N, the model receives HN , LN , the target exponent α, and an allowed symbolic grammar.
+It returns an expression tree for VN and numerical or symbolic values for any free parameters.
+Evaluation should be split into the following stages.
+6
+1. Syntax and regularity. Check that the expression is real, periodic in each angle, globally
+defined, and C
+2
+. Denominators such as 1/pi require smooth cutoffs that vanish near pi = 0.
+2. Positivity and coercivity. Search for violations of VN ≥ 1 and verify growth as ∥p∥ → ∞.
+3. Generator falsification. Maximize
+LN VN + c
+VN
+(α + 1 + log VN )
+α
+outside KR, with adversarial sampling concentrated in fast-rotor and near-resonant regimes.
+4. Tail certification. A bounded-box numerical check is not a global Foster–Lyapunov proof.
+Split momentum space into asymptotic regimes and prove the sign of the leading terms in each
+regime.
+5. Blind versus guided scores. Run a blind task using only the dynamics, then a guided task
+in which the structural reference forms (13), (21), (26), or (29) are included in the grammar
+prior. Report both scores.
+A practical first grammar should contain arithmetic operations, integer and learned real constants, sin, cos, exp, log, absolute or smooth absolute value, and a fixed smooth cutoff primitive.
+The N = 4 and N = 5 problems are unlikely to admit short global expressions without some
+mechanism for regime-dependent patching.
+4 Questions left open in this draft
+1. Should the benchmark require a fully global certificate, or should it also include a finite-domain
+discovery track compatible with existing numerical falsifiers?
+2. Should the bath temperatures and friction coefficients be fixed as above or sampled during
+training to test parameter generalization, separately for the one-bath N = 2 and two-bath
+N ≥ 3 cases?
+3. For N = 5, should α = 3 be supplied to the model, or should the model jointly search over α
+and V5?
+4. Which smooth cutoff functions and piecewise constructions should be included as atomic tokens
+in the discrete diffusion vocabulary?
+References
+[1] Noé Cuneo and Christophe Poquet. On the relaxation rate of short chains of rotors interacting
+with Langevin thermostats. Electronic Communications in Probability, 22:1–8, 2017. Paper No.
+35. doi:10.1214/17-ECP62.
+[2] Noé Cuneo, Jean-Pierre Eckmann, and Christophe Poquet. Non-equilibrium steady state and
+subgeometric ergodicity for a chain of three coupled rotors. Nonlinearity, 28(7):2397–2421, 2015.
+doi:10.1088/0951-7715/28/7/2397.
+7
+[3] Noé Cuneo and Jean-Pierre Eckmann. Non-equilibrium steady states for chains of four
+rotors. Communications in Mathematical Physics, 345(1):185–221, 2016. doi:10.1007/
+s00220-015-2550-2.
+8
+[4] Haohan Zou, Jie Feng, Hao Zhao, and Yuanyuan Shi. Analytical Lyapunov function discovery:
+An RL-based generative approach. In Aarti Singh, Maryam Fazel, Daniel Hsu, Simon LacosteJulien, Felix Berkenkamp, Tegan Maharaj, Kiri Wagstaff, and Jerry Zhu, editors, Proceedings of
+the 42nd International Conference on Machine Learning, volume 267 of Proceedings of Machine
+Learning Research, pages 80776–80804. PMLR, 2025. URL: https://proceedings.mlr.press/
+v267/zou25a.html.

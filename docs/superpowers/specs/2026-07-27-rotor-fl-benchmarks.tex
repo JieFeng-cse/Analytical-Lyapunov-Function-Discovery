@@ -1,0 +1,394 @@
+% Canonical LaTeX source of the rotor-chain Foster-Lyapunov benchmark draft
+% (July 27, 2026), supplied verbatim by the user on 2026-08-06. Supersedes the
+% PDF text extraction (2026-07-27-rotor-fl-benchmarks-original-extraction.txt)
+% as the authoritative source; the reconstructed markdown transcription is now
+% fully confirmed against this file.
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\newcommand{\T}{\mathbb{T}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathbf{1}}
+\newcommand{\cL}{\mathcal{L}}
+\newcommand{\cO}{\mathcal{O}}
+\newcommand{\ee}{\mathrm{e}}
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\wt}[1]{\widetilde{#1}}
+
+\title{Benchmark Problems for Symbolic Foster--Lyapunov Discovery\\
+       in Boundary-Thermostatted Rotor Chains}
+\date{July 27, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Common setup}
+
+\subsection{Hamiltonian rotor chain}
+For $N\ge 2$, let
+\[
+q=(q_1,\ldots,q_N)\in\T^N,
+\qquad
+p=(p_1,\ldots,p_N)\in\R^N.
+\]
+Here $\T=\R/(2\pi\mathbb Z)$ denotes the one-dimensional torus: angles that differ by an integer multiple of $2\pi$ represent the same rotor position. Thus $\T^N$ is the Cartesian product of $N$ circles, and every $q_i$ is understood modulo $2\pi$; $p_i$ is its conjugate momentum. Define the bond variables
+\[
+r_i=q_{i+1}-q_i\pmod{2\pi},
+\qquad i=1,\ldots,N-1,
+\]
+and consider the Hamiltonian
+\begin{equation}
+H_N(q,p)=\frac12\sum_{i=1}^{N}p_i^2+\sum_{i=1}^{N-1}W_i(r_i).
+\end{equation}
+The general theory allows smooth, periodic, non-degenerate interactions. To make the four benchmarks directly comparable, we fix
+\begin{equation}
+W_i(r)=W(r)=1-\cos r,
+\qquad
+w(r)=W'(r)=\sin r.
+\end{equation}
+Adding the constant $1$ to $-\cos r$ does not change the dynamics, but makes $H_N\ge0$.
+
+\subsection{Endpoint Langevin baths}
+For $N\ge3$, only rotors $1$ and $N$ are coupled to heat baths. We use the concrete parameters
+\begin{equation}
+\gamma_1=\gamma_N=1,
+\qquad T_1=1,
+\qquad T_N=2,
+\end{equation}
+and zero external torques. The stochastic dynamics are
+\begin{subequations}
+\begin{align}
+\dd q_i &=p_i\dd t, &&i=1,\ldots,N,\\
+\dd p_1&=\bigl(w(r_1)-p_1\bigr)\dd t+\sqrt2\,\dd B_t^1,\\
+\dd p_i&=\bigl(w(r_i)-w(r_{i-1})\bigr)\dd t,
+&&i=2,\ldots,N-1,\\
+\dd p_N&=\bigl(-w(r_{N-1})-p_N\bigr)\dd t+2\,\dd B_t^N.
+\end{align}
+\end{subequations}
+where $B^1$ and $B^N$ are independent standard Brownian motions. More generally, the noise coefficient at endpoint $b$ is $\sqrt{2\gamma_bT_b}$.
+
+Let $F_i(q)=-\partial_{q_i}H_N(q,p)$. The infinitesimal generator acting on a $C^2$ function $f$ is
+\begin{equation}
+\cL_Nf=\sum_{i=1}^{N}\bigl(p_i\partial_{q_i}f+F_i(q)\partial_{p_i}f\bigr)
+-p_1\partial_{p_1}f-p_N\partial_{p_N}f
++\partial_{p_1p_1}f+2\partial_{p_Np_N}f.
+\end{equation}
+In particular,
+\begin{equation}
+\cL_NH_N=(1-p_1^2)+(2-p_N^2).
+\end{equation}
+Thus $H_N$ alone does not detect energy trapped in the undamped interior rotors and is not a sufficient Foster--Lyapunov function.
+
+\subsection{One-bath $N=2$ specialization}
+The baby benchmark is deliberately not obtained by identifying the two endpoints in (4). Instead, only rotor $1$ is thermostatted, with $\gamma_1=T_1=1$, and rotor $2$ has neither friction nor noise:
+\begin{subequations}
+\begin{align}
+\dd q_i&=p_i\dd t, &&i=1,2,\\
+\dd p_1&=\bigl(w(r_1)-p_1\bigr)\dd t+\sqrt2\,\dd B_t^1,\\
+\dd p_2&=-w(r_1)\dd t.
+\end{align}
+\end{subequations}
+Its generator is
+\begin{equation}
+\cL_2f=p_1\partial_{q_1}f+p_2\partial_{q_2}f
++w(r_1)(\partial_{p_1}-\partial_{p_2})f
+-p_1\partial_{p_1}f+\partial_{p_1p_1}f,
+\end{equation}
+and
+\begin{equation}
+\cL_2H_2=1-p_1^2.
+\end{equation}
+Thus the unthermostatted second rotor creates the same fast-rotor obstruction as an interior rotor in a longer chain.
+
+\subsection{Target certificate}
+For $R>0$, let
+\[
+K_R=\{(q,p):H_N(q,p)\le R\}.
+\]
+The model must generate an explicit, periodic-in-$q$, $C^2$ function
+\[
+V_N:\T^N\times\R^N\longrightarrow[1,\infty)
+\]
+with compact sublevel sets, together with constants $c,C,R>0$, such that
+\begin{equation}
+\cL_NV_N\le C\1_{K_R}-\phi_N(V_N)
+\qquad\text{on }\T^N\times\R^N.
+\end{equation}
+We use the parametric drift family
+\begin{equation}
+\phi_{\alpha,c}(v)=c\frac{v}{(\alpha+1+\log v)^\alpha},
+\qquad v\ge1.
+\end{equation}
+The offset $\alpha+1$ makes this representative increasing and concave on $[1,\infty)$; its precise value is otherwise inessential. The significant feature is the large-$v$ behavior $v/(\log v)^\alpha$.
+
+These are stochastic Foster--Lyapunov problems. Therefore the reward and falsification code must evaluate the full generator (8) or (5), including the second derivatives in every noisy momentum (one for $N=2$ and two for $N\ge3$). Replacing $\cL_NV$ by the first-order Lie derivative would define a different problem.
+
+\begin{center}
+\begin{tabular}{ccccc}
+\toprule
+$N$ & state dimension & status & target $\alpha$ & associated rate\\
+\midrule
+2 & 4  & proved      & 1 & $\exp(-ct^{1/2})$\\
+3 & 6  & proved      & 1 & $\exp(-ct^{1/2})$\\
+4 & 8  & proved      & 1 & $\exp(-ct^{1/2})$\\
+5 & 10 & conjectural & 3 & $\exp(-ct^{1/4})$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{The four testing problems}
+
+\noindent\textbf{Testing problem 1 ($N=2$: one fast unthermostatted rotor).}
+\emph{Use the one-bath dynamics (7). Explicitly,}
+\begin{align*}
+H_2&=\frac12(p_1^2+p_2^2)+(1-\cos(q_2-q_1)),\\
+\dd p_1&=\bigl(\sin(q_2-q_1)-p_1\bigr)\dd t+\sqrt2\,\dd B_t^1,\\
+\dd p_2&=-\sin(q_2-q_1)\dd t.
+\end{align*}
+\emph{Find a globally $C^2$, coercive $V_2$ and $c,C,R>0$ such that}
+\begin{equation}
+\cL_2V_2\le C\1_{K_R}-c\frac{V_2}{2+\log V_2}.
+\end{equation}
+\emph{The output must be periodic in $(q_1,q_2)$ and coercive in $(p_1,p_2)$, including along the fast unthermostatted direction $|p_2|\to\infty$ with $p_1$ bounded.}
+
+\medskip
+\noindent\textbf{Known reference information.}
+Cuneo and Poquet study precisely this two-rotor, one-bath model and prove that the stretched-exponential scale $\exp(-ct^{1/2})$ cannot be improved~[1]. They also observe that the matching upper bound follows from the three-rotor Foster--Lyapunov proof by omitting the third rotor~[2]. The resulting one-branch reference construction has, for sufficiently small $0<\theta<1$, the structure
+\begin{equation}
+V_2^{\mathrm{ref}}=1+\ee^{\theta H_2}
++A\rho_2(p)\wt p_2^{\;2}\exp\!\left(\frac\theta2\wt p_2^{\;2}\right).
+\end{equation}
+We fix the gate explicitly. Let
+\begin{equation}
+b(u)=
+\begin{cases}
+0,&u\le0,\\
+\exp(-1/u),&u>0,
+\end{cases}
+\qquad
+\chi(z)=\frac{b(z-1)}{b(z-1)+b(4-z)}.
+\end{equation}
+Thus $\chi(z)=0$ for $z\le1$ and $\chi(z)=1$ for $z\ge4$. Taking $k=2$ and $R_\rho=4$, define
+\begin{equation}
+S_2(p_1)=p_1^4+4,
+\qquad
+\rho_2(p_1,p_2)=\chi\!\left(\frac{p_2^2}{S_2(p_1)^2}\right).
+\end{equation}
+In particular, $\rho_2=0$ when $|p_2|\le p_1^4+4$, and $\rho_2=1$ when $|p_2|\ge2(p_1^4+4)$. To regularize the inverse powers appearing below, set
+\begin{equation}
+I_j(p_1,p_2)=
+\begin{cases}
+\rho_2(p_1,p_2)/p_2^j,&p_2\ne0,\\
+0,&p_2=0,
+\end{cases}
+\qquad j=1,\ldots,4.
+\end{equation}
+Each $I_j$ is globally $C^\infty$, since $\rho_2$ vanishes on a neighborhood of $p_2=0$. The corrected fast momentum is obtained by averaging the oscillatory interaction force. With the regularization above, one concrete normal form for the cosine benchmark is
+\begin{align}
+\wt p_2={}&p_2-(\cos r_1)I_1-(p_1\cos r_1)I_2\notag\\
+&-(p_1^2\cos r_1+p_1\sin r_1+\cos^2r_1)I_3\notag\\
+&+\left(-p_1^3\cos r_1-3p_1^2\sin r_1-3p_1\cos^2r_1+p_1\cos r_1
+-\frac12\sin r_1\cos r_1+2\sin r_1\right)I_4.
+\end{align}
+On the fully selected fast branch $\rho_2=1$, this agrees with the inverse-power normal form and satisfies
+\begin{equation}
+\dd\wt p_2=
+\left(-\frac{1}{2p_2^3}+\cO_f(p_2^{-4})\right)\dd t
++\left(-\frac{\sqrt2\cos r_1}{p_2^2}+\cO_f(p_2^{-3})\right)\dd B_t^1.
+\end{equation}
+Here and below, $\cO_f$ denotes the weighted fast-region remainders: their coefficients may depend polynomially on the thermostatted endpoint momenta but are controlled by the corresponding gate. The singular expression (17) has become globally smooth through (16). There are constants $a_1,a_2>0$ such that
+\begin{equation}
+1+a_1\ee^{\theta H_2}\le V_2^{\mathrm{ref}}\le a_2(1+p_2^2)\ee^{\theta H_2}.
+\end{equation}
+The separate test function constructed explicitly in~[1] establishes the lower relaxation bound; it has a positive upper drift and should not be confused with the negative-drift Foster--Lyapunov reference (13).
+
+\medskip
+\noindent\textbf{Testing problem 2 ($N=3$: one fast interior rotor).}
+Set $N=3$ in (1)--(4). Explicitly,
+\begin{align*}
+H_3&=\frac12(p_1^2+p_2^2+p_3^2)+(1-\cos(q_2-q_1))+(1-\cos(q_3-q_2)),\\
+\dd p_1&=\bigl(\sin(q_2-q_1)-p_1\bigr)\dd t+\sqrt2\,\dd B_t^1,\\
+\dd p_2&=\bigl(\sin(q_3-q_2)-\sin(q_2-q_1)\bigr)\dd t,\\
+\dd p_3&=\bigl(-\sin(q_3-q_2)-p_3\bigr)\dd t+2\,\dd B_t^3.
+\end{align*}
+Find $V_3$ and $c,C,R>0$ satisfying
+\begin{equation}
+\cL_3V_3\le C\1_{K_R}-c\frac{V_3}{2+\log V_3}.
+\end{equation}
+The output must be coercive in $(p_1,p_2,p_3)$ and globally $C^2$.
+
+\medskip
+\noindent\textbf{Known reference information.}
+This target is rigorous for sufficiently small exponential weight $\theta>0$~[2]. The published construction has the structure
+\begin{equation}
+V_3^{\mathrm{ref}}=1+\ee^{\theta H_3}
++A\rho_3(p)\wt p_2^{\;2}\exp\!\left(\frac\theta2\wt p_2^{\;2}\right),
+\end{equation}
+where $\rho_3$ is a smooth gate selecting the regime in which $|p_2|$ dominates the endpoint momenta, and $\wt p_2$ is a corrected fast momentum whose dynamics become slow after averaging the rapidly oscillating forces. For the cosine benchmark, the first two counterterms are explicitly
+\begin{equation}
+\wt p_2=p_2-\frac{\cos r_1+\cos r_2}{p_2}
+-\frac{p_1\cos r_1+p_3\cos r_2}{p_2^2}+\cO_f(p_2^{-3}).
+\end{equation}
+The higher counterterms in (22) are selected recursively, not arbitrarily, so that on the gated fast branch
+\begin{align}
+\dd\wt p_2={}&\left(-\frac1{p_2^3}+\cO_f(p_2^{-4})\right)\dd t\notag\\
+&+\left(-\frac{\sqrt2\cos r_1}{p_2^2}+\cO_f(p_2^{-3})\right)\dd B_t^1\notag\\
+&+\left(-\frac{2\cos r_2}{p_2^2}+\cO_f(p_2^{-3})\right)\dd B_t^3.
+\end{align}
+As in the $N=2$ case, this fast-branch expression is smoothly extended where $\rho_3=0$. The reference theorem gives constants $a_1,a_2>0$ such that
+\begin{equation}
+1+a_1\ee^{\theta H_3}\le V_3^{\mathrm{ref}}\le a_2(1+p_2^2)\ee^{\theta H_3}.
+\end{equation}
+For a strict blind test, equations (21)--(24) should be withheld from the generator and used only for comparison.
+
+\medskip
+\noindent\textbf{Testing problem 3 ($N=4$: two fast interior rotors and resonances).}
+Set $N=4$. The interior momentum equations are
+\begin{align*}
+\dd p_2&=\bigl(\sin(q_3-q_2)-\sin(q_2-q_1)\bigr)\dd t,\\
+\dd p_3&=\bigl(\sin(q_4-q_3)-\sin(q_3-q_2)\bigr)\dd t,
+\end{align*}
+with the endpoint equations given by (4). Find a globally $C^2$, coercive $V_4$ and $c,C,R>0$ such that
+\begin{equation}
+\cL_4V_4\le C\1_{K_R}-c\frac{V_4}{2+\log V_4}.
+\end{equation}
+The certificate must cover all high-energy regimes: only $p_2$ fast, only $p_3$ fast, both fast and non-resonant, and both fast and resonant.
+
+\medskip
+\noindent\textbf{Known reference information.}
+This target is also rigorous~[3]. For any
+\[
+0<\theta<\min(T_1^{-1},T_4^{-1})=\frac12,
+\]
+the reference construction patches several regime-specific functions:
+\begin{equation}
+V_4^{\mathrm{ref}}=1+\ee^{\theta H_4}+\psi_2(p)V_2+\psi_3(p)V_3+M\psi_c(p)V_c.
+\end{equation}
+Here $\psi_2,\psi_3,\psi_c$ are smooth regime gates. The one-fast-rotor pieces have the asymptotic form
+\[
+V_j\asymp\exp\!\left(|\wt p_j|^a+\frac\theta2\wt p_j^{\;2}\right),
+\qquad j=2,3,\quad 0<a<1,
+\]
+whereas the both-fast piece has the form
+\[
+V_c\asymp\wt H_c\ee^{\theta\wt H_c},
+\qquad
+\wt H_c\asymp\frac12(p_2^2+p_3^2).
+\]
+The tildes denote averaging and resonance counterterms, not merely a change of notation. The resulting global function obeys
+\begin{equation}
+1+\ee^{\theta H_4}\le V_4^{\mathrm{ref}}
+\le a_3\bigl(\ee^{|p_2|^a}+\ee^{|p_3|^a}\bigr)\ee^{\theta H_4}
+\end{equation}
+for some $a_3>0$. Again, the reference structure can either be supplied as a grammar prior or withheld for a genuinely blind test.
+
+\medskip
+\noindent\textbf{Testing problem 4 ($N=5$: conjectural central-rotor bottleneck).}
+Set $N=5$. In addition to the endpoint equations, the interior dynamics are
+\begin{align*}
+\dd p_2&=\bigl(\sin(q_3-q_2)-\sin(q_2-q_1)\bigr)\dd t,\\
+\dd p_3&=\bigl(\sin(q_4-q_3)-\sin(q_3-q_2)\bigr)\dd t,\\
+\dd p_4&=\bigl(\sin(q_5-q_4)-\sin(q_4-q_3)\bigr)\dd t.
+\end{align*}
+Find or falsify the existence of a globally $C^2$, coercive $V_5$ and $c,C,R>0$ satisfying the conjectural inequality
+\begin{equation}
+\cL_5V_5\le C\1_{K_R}-c\frac{V_5}{(4+\log V_5)^3}.
+\end{equation}
+The phrase ``find or falsify'' is important: failure of a particular symbolic ansatz is not a disproof, but an explicit sequence of states along which its drift inequality fails is a useful counterexample for further training.
+
+\medskip
+\noindent\textbf{Conjecture 1 (Benchmark conjecture for $N=5$).}
+For the chain above, there are $\theta,c,C,R>0$ and a smooth $V_5\ge1$ with
+\[
+\log V_5=\theta H_5+o(H_5)\qquad\text{as }H_5\to\infty
+\]
+such that (28) holds.
+
+The exponent $3$ is inferred from the conjectured mixing law in~[3, Remark 5.3]. If $\phi(v)\asymp v/(\log v)^\alpha$, then
+\[
+H_\phi(u)=\int_1^u\frac{\dd s}{\phi(s)}\asymp(\log u)^{\alpha+1},
+\]
+and the corresponding stretched-exponential power is $1/(\alpha+1)$. The prediction
+\[
+k_N=\frac1{2\lceil N/2\rceil-2}
+\]
+gives $k_5=1/4$, hence $\alpha=3$.
+
+One heuristic starting point for the generator is
+\begin{equation}
+V_5^{\mathrm{ansatz}}=1+\ee^{\theta H_5}
++A\psi_3(p)\wt p_3^{\;6}\exp\!\left(\frac\theta2\wt p_3^{\;2}\right)
++\text{corrections for the other fast and resonant regimes}.
+\end{equation}
+This ansatz is motivated by the unproved effective scaling
+\[
+\cL_5\wt p_3\sim-\kappa\wt p_3^{-7}
+\quad\Longrightarrow\quad
+\frac{\cL_5V_5}{V_5}\sim-\wt p_3^{-6}\sim-(\log V_5)^{-3}.
+\]
+Both the scaling and the required correction terms are conjectural. A serious search must also treat high energy shared among $(p_2,p_3)$, $(p_3,p_4)$, or $(p_2,p_3,p_4)$, where new resonances can arise.
+
+\section{Suggested evaluation protocol}
+For each $N$, the model receives $H_N$, $\cL_N$, the target exponent $\alpha$, and an allowed symbolic grammar. It returns an expression tree for $V_N$ and numerical or symbolic values for any free parameters. Evaluation should be split into the following stages.
+
+\begin{enumerate}[leftmargin=*,itemsep=0.75em]
+\item \textbf{Syntax and regularity.} Check that the expression is real, periodic in each angle, globally defined, and $C^2$. Denominators such as $1/p_i$ require smooth cutoffs that vanish near $p_i=0$.
+
+\item \textbf{Positivity and coercivity.} Search for violations of $V_N\ge1$ and verify growth as $\lVert p\rVert\to\infty$.
+
+\item \textbf{Generator falsification.} Maximize
+\[
+\cL_NV_N+c\frac{V_N}{(\alpha+1+\log V_N)^\alpha}
+\]
+outside $K_R$, with adversarial sampling concentrated in fast-rotor and near-resonant regimes.
+
+\item \textbf{Tail certification.} A bounded-box numerical check is not a global Foster--Lyapunov proof. Split momentum space into asymptotic regimes and prove the sign of the leading terms in each regime.
+
+\item \textbf{Blind versus guided scores.} Run a blind task using only the dynamics, then a guided task in which the structural reference forms (13), (21), (26), or (29) are included in the grammar prior. Report both scores.
+\end{enumerate}
+
+A practical first grammar should contain arithmetic operations, integer and learned real constants, $\sin$, $\cos$, $\exp$, $\log$, absolute or smooth absolute value, and a fixed smooth cutoff primitive. The $N=4$ and $N=5$ problems are unlikely to admit short global expressions without some mechanism for regime-dependent patching.
+
+\section{Questions left open in this draft}
+\begin{enumerate}[leftmargin=*,itemsep=0.75em]
+\item Should the benchmark require a fully global certificate, or should it also include a finite-domain discovery track compatible with existing numerical falsifiers?
+\item Should the bath temperatures and friction coefficients be fixed as above or sampled during training to test parameter generalization, separately for the one-bath $N=2$ and two-bath $N\ge3$ cases?
+\item For $N=5$, should $\alpha=3$ be supplied to the model, or should the model jointly search over $\alpha$ and $V_5$?
+\item Which smooth cutoff functions and piecewise constructions should be included as atomic tokens in the discrete diffusion vocabulary?
+\end{enumerate}
+
+\begin{thebibliography}{9}
+\bibitem{cuneo-poquet-2017}
+Noé Cuneo and Christophe Poquet.
+On the relaxation rate of short chains of rotors interacting with Langevin thermostats.
+\emph{Electronic Communications in Probability}, 22:1--8, 2017. Paper No.~35.
+\href{https://doi.org/10.1214/17-ECP62}{doi:10.1214/17-ECP62}.
+
+\bibitem{cuneo-eckmann-poquet-2015}
+Noé Cuneo, Jean-Pierre Eckmann, and Christophe Poquet.
+Non-equilibrium steady state and subgeometric ergodicity for a chain of three coupled rotors.
+\emph{Nonlinearity}, 28(7):2397--2421, 2015.
+\href{https://doi.org/10.1088/0951-7715/28/7/2397}{doi:10.1088/0951-7715/28/7/2397}.
+
+\bibitem{cuneo-eckmann-2016}
+Noé Cuneo and Jean-Pierre Eckmann.
+Non-equilibrium steady states for chains of four rotors.
+\emph{Communications in Mathematical Physics}, 345(1):185--221, 2016.
+\href{https://doi.org/10.1007/s00220-015-2550-2}{doi:10.1007/s00220-015-2550-2}.
+
+\bibitem{zou-et-al-2025}
+Haohan Zou, Jie Feng, Hao Zhao, and Yuanyuan Shi.
+Analytical Lyapunov function discovery: An RL-based generative approach.
+In Aarti Singh, Maryam Fazel, Daniel Hsu, Simon Lacoste-Julien, Felix Berkenkamp, Tegan Maharaj, Kiri Wagstaff, and Jerry Zhu, editors,
+\emph{Proceedings of the 42nd International Conference on Machine Learning}, volume 267 of \emph{Proceedings of Machine Learning Research}, pages 80776--80804. PMLR, 2025.
+\url{https://proceedings.mlr.press/v267/zou25a.html}.
+\end{thebibliography}
+
+\end{document}

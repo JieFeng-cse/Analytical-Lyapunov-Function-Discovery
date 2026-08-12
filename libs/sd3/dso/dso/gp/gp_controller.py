@@ -209,7 +209,10 @@ class GPController:
         """
         random.seed(self.seed)
         np.random.seed(self.seed)
-        self.toolbox.register("map", map)
+        # base.py evaluates fitness via toolbox.map; re-registering the serial
+        # builtin here on every call silently discarded the pool wired up in
+        # __init__ (which was registered as "cmap", a name base.py never reads).
+        self.toolbox.register("map", self.pool.map if self.pool is not None else map)
 
         t1 = time.perf_counter()
 

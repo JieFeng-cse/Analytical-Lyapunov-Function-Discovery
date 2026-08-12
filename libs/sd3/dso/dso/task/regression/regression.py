@@ -248,22 +248,57 @@ class RegressionTask(HierarchicalTask):
         import sympy as sym_
         from config import dynamics, generator_spec
         from utils.fl_reward import fl_penalty
-        state_vars, _ = dynamics()
+        from utils.fl_scaffold import fl_V_and_LV
+        state_vars, drift = dynamics()
         spec = generator_spec()
-        y_hat = p.execute(self.X_train)
-        if p.invalid:
-            return self.invalid_reward
-        used = p.sympy_expr[0].free_symbols
-        if len(used) < len(state_vars):
-            return self.invalid_reward
+        template = spec.get("scaffold") is not None
+        stage_mode = template and spec.get("stage")
+        if stage_mode:
+            # Stage mode scores the sympy slot expression, never y_hat; skip
+            # execute() (it would also crash on not-yet-optimized constants).
+            y_hat = None
+        else:
+            y_hat = p.execute(self.X_train)   # also sets p.invalid on blowups
+            if p.invalid:
+                return self.invalid_reward
+            if len(p.sympy_expr[0].free_symbols) < len(state_vars):
+                return self.invalid_reward
+        if stage_mode:
+            # Stage mode (C10): reward = gate-weighted mean squared averaging
+            # residual of L ptilde -- theta/A/c/R-free, bounded numbers.
+            from utils.fl_scaffold import fl_stage_penalty
+            # Program.sympy_expr is a cached_property built from the traversal;
+            # the constant optimizer mutates the traversal in place, so the
+            # cache must be dropped or optimized constants never take effect.
+            if getattr(p, "const_pos", None):
+                p.__dict__.pop("sympy_expr", None)
+                p.__dict__.pop("sympy_expr_generator", None)
+            try:
+                pen, ok = fl_stage_penalty(p.sympy_expr[0], spec, state_vars,
+                                           drift, self.X_train)
+            except Exception:
+                return self.invalid_reward
+            if not ok:
+                return self.invalid_reward
+            return 1.0 / (1.0 + pen)
         try:
+            V, LV, ok = fl_V_and_LV(p.sympy_expr[0], spec, state_vars, drift,
+                                    lv_expr=None if template else p.sympy_expr_generator)
+            if not ok:
+                return self.invalid_reward
             args = [self.X_train[:, i] for i in range(self.X_train.shape[1])]
-            lv_vals = sym_.lambdify(state_vars, p.sympy_expr_generator, "numpy")(*args)
+            n = self.X_train.shape[0]
+            if template:
+                v_vals = sym_.lambdify(state_vars, V, "numpy")(*args)
+            else:
+                v_vals = y_hat
+            lv_vals = sym_.lambdify(state_vars, LV, "numpy")(*args)
             h_vals = sym_.lambdify(state_vars, spec["H"], "numpy")(*args)
-            lv_vals = np.broadcast_to(np.asarray(lv_vals, dtype=np.float64), y_hat.shape)
+            v_vals = np.broadcast_to(np.asarray(v_vals, dtype=np.float64), (n,))
+            lv_vals = np.broadcast_to(np.asarray(lv_vals, dtype=np.float64), (n,))
         except Exception:
             return self.invalid_reward
-        return 1.0 / (1.0 + fl_penalty(y_hat, lv_vals, h_vals, spec))
+        return 1.0 / (1.0 + fl_penalty(v_vals, lv_vals, h_vals, spec))
 
     def evaluate(self, p):
 
@@ -271,17 +306,41 @@ class RegressionTask(HierarchicalTask):
             import sympy as sym_
             from config import dynamics, generator_spec
             from utils.fl_reward import fl_violation
-            state_vars, _ = dynamics()
+            from utils.fl_scaffold import fl_V_and_LV
+            state_vars, drift = dynamics()
             spec = generator_spec()
-            y_hat = p.execute(self.X_test)
-            if p.invalid or len(p.sympy_expr[0].free_symbols) < len(state_vars):
+            template = spec.get("scaffold") is not None
+            stage_mode = template and spec.get("stage")
+            y_hat = None if stage_mode else p.execute(self.X_test)
+            if (not stage_mode) and (p.invalid or (
+                    not template and
+                    len(p.sympy_expr[0].free_symbols) < len(state_vars))):
                 nmse_test = 1e6
+            elif stage_mode:
+                from utils.fl_scaffold import fl_stage_penalty
+                if getattr(p, "const_pos", None):
+                    p.__dict__.pop("sympy_expr", None)
+                    p.__dict__.pop("sympy_expr_generator", None)
+                try:
+                    pen, ok = fl_stage_penalty(p.sympy_expr[0], spec, state_vars,
+                                               drift, self.X_test)
+                    nmse_test = pen if ok else 1e6
+                except Exception:
+                    nmse_test = 1e6
             else:
                 try:
+                    V, LV, ok = fl_V_and_LV(p.sympy_expr[0], spec, state_vars, drift,
+                                            lv_expr=None if template else p.sympy_expr_generator)
+                    if not ok:
+                        raise ValueError("slot uses forbidden variables")
                     args = [self.X_test[:, i] for i in range(self.X_test.shape[1])]
-                    lv = sym_.lambdify(state_vars, p.sympy_expr_generator, "numpy")(*args)
+                    n = self.X_test.shape[0]
+                    if template:
+                        y_hat = sym_.lambdify(state_vars, V, "numpy")(*args)
+                    lv = sym_.lambdify(state_vars, LV, "numpy")(*args)
                     h = sym_.lambdify(state_vars, spec["H"], "numpy")(*args)
-                    lv = np.broadcast_to(np.asarray(lv, dtype=np.float64), y_hat.shape)
+                    y_hat = np.broadcast_to(np.asarray(y_hat, dtype=np.float64), (n,))
+                    lv = np.broadcast_to(np.asarray(lv, dtype=np.float64), (n,))
                     nmse_test = fl_violation(y_hat, lv, h, spec)
                 except Exception:
                     nmse_test = 1e6
@@ -393,11 +452,13 @@ def make_regression_metric(name, y_train, *args):
 
     all_invalid_rewards = {
         "lyapunov_risk": 0.0,
+        "foster_lyapunov": 0.0,
     }
     invalid_reward = all_invalid_rewards[name]
 
     all_max_rewards = {
         "lyapunov_risk": 1.0,
+        "foster_lyapunov": 1.0,
     }
     max_reward = all_max_rewards[name]
 

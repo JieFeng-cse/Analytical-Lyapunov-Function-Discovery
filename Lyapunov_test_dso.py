@@ -98,6 +98,12 @@ logger = create_our_logger(path_run_name)
 logger.info(f"See log at : ./logs/{path_run_name}_log.txt")
 data_samples_to_use = int(float(df["train_spec"][0].split(",")[-1].split("]")[0]) * conf.exp.dataset_size_multiplier)
 
+def _gp_pool_init(config_task, const_name, const_params):
+    """GP fitness-pool worker init (spawn-safe): task + constant optimizer."""
+    set_task(config_task)
+    Program.set_const_optimizer(const_name, **(const_params or {}))
+
+
 def perform_run(tuple_in):
     seed, dataset, baseline = tuple_in
     logger.info(
@@ -244,7 +250,24 @@ def top_main(
     const_params = const_params if const_params is not None else {}
     Program.set_const_optimizer(const_optimizer, **const_params)
 
-    pool = None
+    # GP-meld fitness pool. The published code passed pool=None, so DEAP fitness
+    # evaluation (constant optimization + reward on the full training set) ran on a
+    # single core while the SLURM job allocates 16. Workers are initialized with
+    # set_task (mirroring dso.core.make_pool) so Program.task exists in each child.
+    # Must be created before the parent touches CUDA (fork safety). LYA_GP_CORES=1
+    # restores the old serial behavior.
+    n_cores_gp = int(os.environ.get("LYA_GP_CORES")
+                     or os.environ.get("SLURM_CPUS_PER_TASK")
+                     or multiprocessing.cpu_count())
+    if n_cores_gp > 1:
+        # initializer must ALSO set the const optimizer: torch.multiprocessing
+        # starts workers with "spawn", so they re-import fresh and would get
+        # Program.const_optimizer = None (crash inside Program.optimize()).
+        pool = multiprocessing.Pool(n_cores_gp, initializer=_gp_pool_init,
+                                    initargs=(config["task"], const_optimizer,
+                                              const_params))
+    else:
+        pool = None
     # Set the Task for the parent process
     set_task(config["task"])
 

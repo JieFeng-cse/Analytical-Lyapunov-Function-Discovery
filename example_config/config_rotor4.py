@@ -3,7 +3,7 @@ import collections
 from omegaconf import OmegaConf
 import sympy as sym  # noqa: F401  (kept for parity with other configs)
 
-from example_config.rotor_common import make_rotor
+from example_config.rotor_common import make_rotor, get_config, apply_slot_overrides  # noqa: F401  (get_config re-exported for Lyapunov_test_dso)
 
 _N = 4
 _SV, _DRIFT, _SPEC = make_rotor(_N)
@@ -18,7 +18,7 @@ def generator_spec():
 
 
 def config_factory():
-    return {
+    return apply_slot_overrides({
         "task": {
             "task_type": "regression",
             "function_set": ["add", "sub", "mul", "div", "sin", "cos", "exp", "n2"],  # Koza
@@ -49,7 +49,7 @@ def config_factory():
             "uniform_arity": {"on": False},
             "soft_length": {"loc": 25, "scale": 5, "on": True},
         },
-    }
+    })
 
 
 def train_config_factory():
