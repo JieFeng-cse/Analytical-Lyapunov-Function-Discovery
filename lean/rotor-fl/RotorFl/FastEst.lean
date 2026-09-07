@@ -190,9 +190,8 @@ lemma ptf_p₁_eq {r p₁ p₂ : ℝ} (h₂ : p₂ ≠ 0) :
   field_simp
   ring
 
-lemma abs_ptf_p₁_le {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
+lemma abs_ptf_p₁_le {r p₁ p₂ : ℝ} (hU : SmallU p₁ (1 / p₂)) (h₂ : p₂ ≠ 0) :
     |ptf_p₁ r p₁ p₂| ≤ (1 + 1 / 100) * (1 / p₂) ^ 2 := by
-  have hU := h.fastU.smallU
   have hm := hU.abs_mul
   have hv := hU.small
   have hv0 := abs_nonneg (1 / p₂)
@@ -201,7 +200,7 @@ lemma abs_ptf_p₁_le {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
   have b3 := abs_t3_p₁_le r p₁
   have b4 := abs_t4_p₁_le r p₁
   simp only [pow_zero, pow_one, one_mul] at b2 b3 b4
-  rw [ptf_p₁_eq h.p₂_ne]
+  rw [ptf_p₁_eq h₂]
   set u := 1 / p₂ with hu
   set v := |u| with hvdef
   set a := |p₁| with hadef

@@ -107,7 +107,7 @@ theorem term3_le {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
   have hq := abs_le.mp (abs_q_sub_one_le h)
   have hU := h.fastU
   have hv := hU.small
-  have hd := abs_ptf_p₁_le h
+  have hd := abs_ptf_p₁_le (r := r) h.fastU.smallU h.p₂_ne
   unfold Ff''
   set u := 1 / p₂ with hu
   set p := ptf r p₁ p₂ with hp
