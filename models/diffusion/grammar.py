@@ -14,8 +14,11 @@ import numpy as np
 
 
 class Grammar:
-    def __init__(self, library, max_const=10, ban_nested_trig=True, max_len=64):
+    def __init__(self, library, max_const=10, ban_nested_trig=True, max_len=64,
+                 root_token=None):
         self.library = library
+        # blind skeleton search: token forced at position 0, forbidden elsewhere
+        self.root_token = None if root_token is None else int(root_token)
         self.L = int(library.L)
         self.arities = np.asarray(library.arities, dtype=np.int64)
         self.PAD = self.L
@@ -103,8 +106,13 @@ class Grammar:
             return mask
         const_count = (sum(1 for t in self._real(tokens) if t == self.const_token)
                        if self.const_token is not None else 0)
+        if self.root_token is not None and len(self._real(tokens)) == 0:
+            mask[self.root_token] = True     # position 0: only the root token
+            return mask
         for tid in range(self.L):
             if self.const_token is not None and tid == self.const_token and const_count >= self.max_const:
+                continue
+            if self.root_token is not None and tid == self.root_token:
                 continue
             if self._would_nest_trig(tokens, tid):
                 continue
@@ -115,12 +123,20 @@ class Grammar:
 
     # --- repair + fallback (design doc §7) --------------------------------------
     def fallback(self):
-        return [int(self.terminal_tokens[0])]
+        t = int(self.terminal_tokens[0])
+        if self.root_token is None:
+            return [t]
+        return [self.root_token] + [t] * self.arity(self.root_token)
 
     def repair(self, tokens):
         """Coerce a (possibly invalid) token list into a complete valid pre-order tree."""
         out = []
-        for tok in self._real(tokens):
+        real = self._real(tokens)
+        if self.root_token is not None:
+            out = [self.root_token]
+            if real and real[0] == self.root_token:
+                real = real[1:]
+        for tok in real:
             if self.dangling(out) <= 0:
                 break
             if not self.valid_token_mask(out)[tok]:   # invalid given context -> terminal

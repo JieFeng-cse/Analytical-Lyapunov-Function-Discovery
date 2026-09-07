@@ -26,3 +26,19 @@ def test_root_prior_is_violated():
     assert not prior.is_violated(np.array([pair, x1, x1]), None, None)
     assert prior.is_violated(np.array([add, x1, x1]), None, None)
     assert prior.is_violated(np.array([pair, pair, x1, x1, x1]), None, None)
+
+
+def test_diffusion_grammar_root_rule():
+    from models.diffusion.grammar import Grammar
+    lib = _lib()
+    pair, add, x1 = lib.names.index("pair"), lib.names.index("add"), lib.names.index("x1")
+    g = Grammar(lib, root_token=pair)
+    m0 = g.valid_token_mask([])
+    assert m0[pair] and not m0[add]
+    m1 = g.valid_token_mask([pair])
+    assert m1[add] and not m1[pair]
+    rep = g.repair([add, x1, x1])
+    assert rep[0] == pair and pair not in rep[1:] and g.is_complete(rep)
+    rep2 = g.repair([pair, add, pair, x1, x1, x1])
+    assert rep2[0] == pair and pair not in rep2[1:] and g.is_complete(rep2)
+    assert g.fallback()[0] == pair and g.is_complete(g.fallback())

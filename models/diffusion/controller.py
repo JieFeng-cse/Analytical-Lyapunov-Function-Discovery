@@ -57,7 +57,12 @@ class DiffusionController(nn.Module):
                 self.max_length = int(p.max)
                 break
 
-        self.grammar = Grammar(library, max_const=max_const, max_len=self.max_length)
+        root_token = None
+        for p in prior.priors:
+            if p.__class__.__name__ == "RootConstraint":
+                root_token = int(p.token)
+        self.grammar = Grammar(library, max_const=max_const, max_len=self.max_length,
+                               root_token=root_token)
         assert vocab_size is not None, "vocab_size (dynamics prefix vocab) is required"
         self.denoiser = MaskedDiffusionDenoiser(
             self.n_choices, self.max_length, dyn_vocab_size=vocab_size,
