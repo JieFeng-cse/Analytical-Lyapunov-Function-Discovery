@@ -43,22 +43,30 @@ t₃ = p₁² cos r₁ + p₁ sin r₁ + cos² r₁
 t₄ = −p₁³cos r₁ − 3p₁²sin r₁ − 3p₁cos²r₁ + p₁cos r₁ − ½ sin r₁ cos r₁ + 2 sin r₁
 p̃₂       = p₂ − t₁I₁ − t₂I₂ − t₃I₃ + t₄I₄        (doc eq.17 sign convention)
 V         = 1 + e^{θH} + A·ρ·p̃₂²·e^{θp̃₂²/2},   θ = 0.02,  A = 20
-K         = {H ≤ 20} ∪ {ρ < 1 ∧ p₁² ≤ 9}          (paper-shaped, M = 9)
-φ(v)      = c·v/(2 + log v)
+K         = {H ≤ R} ∪ {ρ < 1 ∧ p₁² ≤ M},  R = 1.25·10⁵,  M = 4900   (paper-shaped)
+φ(v)      = c·v/(2 + log v),               c = 8·10⁻⁵
 ```
+
+R, M, c are NOT the box-verification values (R=20, M=9, c*=0.27 of C36).
+They come from the reconnaissance of §10: the C36 values are only valid on
+the ±15 box, which never contains the fast branch (ρ=1 needs |p₂| ≥ 40).
 
 ## 4. Theorems to prove (Lean statements, informal)
 
-- **T1 (tail negative drift).** For an explicit `c > 0` (target `c ≥ 0.1`)
-  and explicit threshold `P₀` (target `P₀ ≤ 15`):
-  `∀ x, max |p₁| |p₂| ≥ P₀ → x ∉ K → LV x + φ (V x) ≤ 0`.
+- **T1 (negative drift outside K).** With `c = 8·10⁻⁵`, `R = 1.25·10⁵`,
+  `M = 4900`:
+  `∀ x, x ∉ K → LV x + φ (V x) ≤ 0`.
+  No box threshold appears: K itself carves out everything that is not
+  provable, so T1 is the full global drift condition and the ±15 box
+  verification becomes a consistency check rather than a missing piece.
 - **T2 (bounded on the exempt set).** Explicit `C`:
   `∀ x ∈ K, LV x ≤ C`. For N=2 the set K is bounded: `ρ < 1` forces
-  `|p₂| < 2S(p₁) ≤ 2·(81+20) = 202` when `p₁² ≤ 9`, and `{H ≤ 20}` is
-  compact. So T2 is an explicit sup bound on a compact set; it still needs
+  `|p₂| < 2S(p₁) ≤ 2·(70⁴+20) ≈ 4.8·10⁷` when `p₁² ≤ 4900`, and `{H ≤ R}`
+  is compact. So T2 is an explicit sup bound on a compact set; it still needs
   the gate-derivative bounds of `Gate.lean` on the part of K inside the
-  transition band. The constant will be crude (order `θ·exp(θ·H_max)`); that
-  is acceptable, only existence with an explicit value is required.
+  transition band. The constant will be astronomically large (order
+  `θ·exp(θ·H_max)` with `H_max ≈ 10¹⁵`) but explicit; only existence with an
+  explicit value is required.
 - **T0 (generator formula).** `LV x = ⟨explicit sympy-exported expression⟩`,
   proved by differentiation lemmas. This is the "L1" check and is used by
   T1/T2.
@@ -71,21 +79,24 @@ threshold and the box verification is extended to it (cheap numerically).
 - **Slow region Ω₁** (`|p₂| ≤ S`, gate closed, ρ = 0): `V = 1 + e^{θH}`.
   H is conserved by the Hamiltonian part of the drift, so exactly
   `LH = 1 − p₁²` and `L e^{θH} = θ e^{θH} (1 − (1−θ) p₁²)`.
-  Points of Ω₁ outside K have `p₁² > 9`, hence
-  `LV ≤ θ(1 − 9(1−θ)) e^{θH} = −0.1564·e^{θH}`, while
-  `φ(V) ≤ c(1+e^{θH})/2`. With `c = 0.1` this closes for every `H`
-  (no threshold needed in this region).
+  Points of Ω₁ outside K have `p₁² > M = 4900`, hence
+  `LV ≤ θ(1 − 4900(1−θ)) e^{θH} < −96·e^{θH}`, while
+  `φ(V) ≤ c(1+e^{θH})/2`. Closes for every `H` with enormous margin
+  (reconnaissance: ratio ≥ 0.22 already for `p₁² > 9`).
 - **Fast region Ω₃** (`|p₂| ≥ 2S`, ρ = 1): core lemma
   `L p̃₂ = −1/(2p̃₂³) + R(x)`, `|R| ≤ C₃/|p̃₂|⁴` with explicit `C₃`
   (polynomial in |p₁|, controlled because `|p₂| ≥ 2(p₁⁴+20)`), then
   `L[p̃₂² e^{θp̃₂²/2}] ≤ −(θ/2)(1 − ε)·e^{θp̃₂²/2}/p̃₂² ...` and finally
   `≤ −c V/(2+log V)` using `log V ≈ θp̃₂²/2 + log A`.
-- **Transition band Ω₂** (`S < |p₂| < 2S`): the part with `p₁² ≤ 9` is in K
-  (only T2 needed); the part with `p₁² > 9` uses explicit bounds on
+- **Transition band Ω₂** (`S < |p₂| < 2S`): the part with `p₁² ≤ M` is in K
+  (only T2 needed); the part with `p₁² > M = 4900` uses explicit bounds on
   `|χ'|, |χ''|` (own lemmas on `smoothTransition`, Mathlib has smoothness
-  but no explicit derivative bounds) and the damping of `e^{θH}`.
-- **T2**: K is compact (§4): `p₁² ≤ 9`, `|p₂| ≤ 202` on the gate part and
-  `H ≤ 20` on the energy part. Bound every term of the explicit LV formula
+  but no explicit derivative bounds) and the damping of `e^{θH}`. The
+  dangerous term is `A p̃₂² e^{θp̃₂²/2} · Lρ` with `Lρ ≈ 8χ'(z)·z` (the gate
+  opens as p₁ is damped); it is beaten only by `θ(1−θ)p₁² e^{θp₁²/2}`, which
+  is why M must be ≈ 67² (reconnaissance §10) and not 9.
+- **T2**: K is compact (§4): `p₁² ≤ 4900`, `|p₂| ≤ 4.8·10⁷` on the gate part
+  and `H ≤ 1.25·10⁵` on the energy part. Bound every term of the explicit LV formula
   (T0) by its sup over that box using the gate-derivative bounds from
   `Gate.lean`; C is the sum. Numerical reconnaissance gives the actual sup
   so the crude bound can be sanity-checked (it must dominate it).
@@ -126,16 +137,49 @@ Python side (in `~/ALFD-rotor`):
 
 ## 8. Acceptance
 
-- `lake build` succeeds; T1, T2 stated exactly as in §4 with numeric constants.
+- `lake build` succeeds; T1, T2 stated exactly as in §4 with the numeric
+  constants `c = 8·10⁻⁵`, `R = 1.25·10⁵`, `M = 4900`.
 - Zero `sorry`, or every `sorry` listed in the ledger with the blocking reason.
 - Every numeric constant in a Lean lemma has a matching reconnaissance line.
-- Threshold `P₀` and `c` reported; if `P₀ > 15`, box verification re-run to `±P₀`.
+- The box verification (C36 machinery) re-run with the K of §3 as a
+  consistency check: it must report zero violations outside K.
 
 ## 9. Risks
 
-- Fast-region remainder constants may push `P₀` above 15 → accept larger
-  threshold (§4).
+- The fast-region proof must hold for all `|p₁| ≤ (|p₂|/2 − 20)^{1/4}`, so the
+  remainder constants are polynomial in `p₁`; the margin at `|p₂| = 500` is
+  only 6 % (ratio 8.49·10⁻⁵ vs c = 8·10⁻⁵). If the explicit bounds cannot
+  reach that, raise R (each doubling of the `|p₂|` threshold costs nothing
+  mathematically; T2's C grows).
 - Explicit `χ'`, `χ''` bounds on `smoothTransition` are new lemmas; if hard,
   fall back to a cruder bound obtained from monotonicity + mean value theorem.
 - Mathlib differentiation of nested `exp(θ·(…)²)` compositions is verbose;
   mitigate by structuring V as named smooth pieces with `HasDerivAt` lemmas.
+
+## 10. Reconnaissance results (2026-09-07, `repro/lean_recon_rotor2.py`)
+
+`ratio(x) := −LV·(2+log V)/V`; the drift condition holds at x iff
+`ratio(x) ≥ c`. Scaled evaluation (no overflow), spot checks with mpmath at
+40 digits on the unscaled V, LV.
+
+| region | condition | min ratio | where |
+|---|---|---|---|
+| Ω₁ slow (ρ=0) | p₁² > 9, |p₂| ≤ S | +0.224 | p₁ = 3, p₂ = 0 |
+| Ω₂ transition | 3 < |p₁| ≤ 67, S < |p₂| < 2S | **−6·10⁶ … −5·10¹⁷** (LV > 0) | |p₂|/S ≈ 1.03–1.8, r₁ ≈ −π/2 |
+| Ω₂ transition | |p₁| ≥ 67.5 | ≥ +2.5·10¹⁴ | |p₂| = S |
+| Ω₃ fast (ρ=1) | 50 < |p₂| < 200, |p₁| = (|p₂|/2−20)^{1/4} | **−2.2·10⁻⁵** (LV > 0, mpmath-confirmed) | p₂ = 80, p₁ = 2.11 |
+| Ω₃ fast | |p₂| ≥ 500 | ≥ +8.49·10⁻⁵ | p₁ ≈ 0, r₁ ≈ ±π |
+| Ω₃ fast | |p₂| → ∞ | → θ²/4·(1−ε) ≈ 8.58·10⁻⁵ | |
+
+Consequences:
+
+1. The C36 statement "rotor2 certificate FEASIBLE, c* = 0.27, K with R=20,
+   M=9" is a statement about the ±15 box only. Globally that K is wrong: the
+   certificate violates the drift condition in the transition band for every
+   3 < |p₁| ≲ 67 and in the fast region for 50 < |p₂| < 200.
+2. The certificate IS valid globally with the paper's quantifier order
+   (M chosen last): `M = 4900`, `R = 1.25·10⁵`, `c = 8·10⁻⁵`. These are the
+   constants T1/T2 use.
+3. The true drift rate is `c ≈ θ²/4`, four orders of magnitude below the
+   box-measured `c*`; the box never contains the fast branch (needs
+   `|p₂| ≥ 2S ≥ 40`), so its `c*` measures only the slow-region damping.
