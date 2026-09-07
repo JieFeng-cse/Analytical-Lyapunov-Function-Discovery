@@ -182,7 +182,53 @@ def rotor2_fast_export():
         der += (f"lemma hasDerivAt_t{j}_p₁p₁ (r p₁ : ℝ) : HasDerivAt (fun t => t{j}_p₁ r t) (t{j}_p₁p₁ r p₁) p₁ := by\n"
                 f"  unfold t{j}_p₁ t{j}_p₁p₁\n  deriv_tac {P.hasderiv(deriv[j]['p₁'], p1, 'p₁')}\n\n")
     der += "end RotorFl\n"
-    return {"FastDefs.lean": defs, "FastDeriv.lean": der}, coeffs
+    # ---------------- FastBounds.lean: |trig poly| ≤ poly(|p₁|) lemmas ---------
+    bnd = HEADER.format(title="Fast-region absolute-value bounds",
+                        blurb="`|E r p₁| ≤ Σ B_k |p₁|^k` for the trig polynomials E used in the\n"
+                              "fast-region estimate; each monomial is bounded by `abs_mono_le`, the sum\n"
+                              "by `linarith`.",
+                        imp="RotorFl.Bounds\nimport RotorFl.FastDefs")
+    bnd += "open Real\n\n"
+
+    def bound_lemma(lean_name, expr, unfold):
+        """|lean_name r p₁| ≤ bound, proof by per-monomial abs_mono_le + linarith."""
+        e = sym.expand(expr)
+        if e == 0:
+            return (f"lemma abs_{lean_name}_le (r p₁ : ℝ) : |{unfold} r p₁| ≤ (0 : ℝ) := by\n"
+                    f"  unfold {unfold}\n  simp\n\n")
+        b = abs_bound_poly(e, p1)
+        bound = " + ".join(f"{P.num(v)} * |p₁| ^ {kk}" for kk, v in sorted(b.items())) or "(0 : ℝ)"
+        out = f"lemma abs_{lean_name}_le (r p₁ : ℝ) : |{unfold} r p₁| ≤ {bound} := by\n  unfold {unfold}\n"
+        haves = []
+        for n, term in enumerate(sym.Add.make_args(e)):
+            c, rest = term.as_coeff_Mul()
+            k = i = j = 0
+            for f in sym.Mul.make_args(rest):
+                base, ex = (f.base, int(f.exp)) if f.is_Pow else (f, 1)
+                if base == p1:
+                    k = ex
+                elif isinstance(base, sym.sin):
+                    i = ex
+                elif isinstance(base, sym.cos):
+                    j = ex
+                elif base == 1:
+                    pass
+                else:
+                    raise ValueError(f"unexpected factor {f} in {term}")
+            out += (f"  have h{n} := abs_le.mp (abs_mono_le {P.num(c)} {P.num(abs(c))} p₁ (Real.sin r) (Real.cos r) "
+                    f"{k} {i} {j} (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))\n")
+            haves.append(f"h{n}")
+        hs = ", ".join(f"{h}.1, {h}.2" for h in haves)
+        out += f"  exact abs_le.mpr ⟨by linarith [{hs}], by linarith [{hs}]⟩\n\n"
+        return out
+
+    for j, tj in t.items():
+        bnd += bound_lemma(f"t{j}", tj, subs[j])
+        bnd += bound_lemma(f"t{j}_p₁", deriv[j]["p₁"], f"t{j}_p₁")
+    bnd += bound_lemma("c4", coeffs[4], "c4")
+    bnd += bound_lemma("c5", coeffs[5], "c5")
+    bnd += "end RotorFl\n"
+    return {"FastDefs.lean": defs, "FastDeriv.lean": der, "FastBounds.lean": bnd}, coeffs
 
 
 if __name__ == "__main__":
