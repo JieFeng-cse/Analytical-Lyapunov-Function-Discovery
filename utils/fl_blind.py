@@ -128,14 +128,14 @@ def reference_pair(order=4, R_rho=20):
 # ---- the judge -------------------------------------------------------------------
 """Exemption set (candidate-dependent, C36 shape; calibrated numbers in spec["blind"]):
 
-    K(rho) = {p1^2 <= M_max and rho < 1}  U  {p1^2 <= M_0 and |p2| <= R2_0}
+    K(rho) = {p1^2 <= M_max and rho < 1 and WITNESS}  U  {p1^2 <= M_0 and |p2| <= R2_0}
 
-The drift condition is scored on the float64-trusted domain
-D = {|p1| <= P1max, |p2| <= P2max} outside K(rho). Compactness of K is enforced
-by two shells on which rho must be identically 1:
-    near shell  {p1^2 <= M_near, R2_near <= |p2| <= P2max}   (inside D: forces the
-                fast branch to be scored there)
-    far shell   {p1^2 <= M_max,  |p2| = R2_max}               (rho only, no drift)
+WITNESS(x): on the same (r1, p1) line the gate reaches 1 at the witness shell
+    |p2| = R2_near  (if p1^2 <= M_near)   else   |p2| = R2_max,
+so a vanishing or infinitesimal gate exempts nothing. The drift condition is
+scored on the float64-trusted domain D = {|p1| <= P1max, |p2| <= P2max}
+outside K(rho). Compactness of K is enforced by requiring rho == 1 on the near
+shell {p1^2 <= M_near, R2_near <= |p2| <= P2max} and on both witness shells.
 Beyond P2max the drift of a good candidate is below float64 cancellation noise
 (L ptilde ~ 1/(2 ptilde^3)); that region is covered by fl_blind_final_check at
 high precision for candidates that already pass on D.
@@ -173,21 +173,20 @@ class BlindJudge:
             + th**2 * sum(k * sym.diff(H, self.sv[i])**2 for i, k in self.noise.items())
         self._thH = self._lam(th * H)
         self._Q1 = self._lam(Q1)
-        n = (13, 12, 20) if b.get("grid_coarse", False) else (25, 24, 40)
+        n = (13, 12, 20) if b.get("grid_coarse", False) else tuple(b.get("grid_n", (17, 16, 32)))
         self.set_grid(make_grid(self.P1max, self.P2max, *n))
-        # far shell: rho only
-        r = np.linspace(-np.pi, np.pi, n[0])
-        a = np.geomspace(0.25, np.sqrt(self.M_max), n[1])
-        p1 = np.concatenate([-a[::-1], [0.0], a])
-        R, P1, P2 = np.meshgrid(r, p1, np.array([-self.R2_max, self.R2_max]), indexing="ij")
-        self.far_shell = np.stack([R.ravel(), P1.ravel(), P2.ravel()], 1)
 
     def set_grid(self, X):
         self.grid = np.asarray(X, dtype=np.float64)
         p1, p2 = self.grid[:, 1], self.grid[:, 2]
         self.box0 = (p1**2 <= self.M_0) & (np.abs(p2) <= self.R2_0)
         self.in_Mmax = p1**2 <= self.M_max
-        self.near_shell = (p1**2 <= self.M_near) & (np.abs(p2) >= self.R2_near)
+        self.in_Mnear = p1**2 <= self.M_near
+        self.near_shell = self.in_Mnear & (np.abs(p2) >= self.R2_near)
+        # witness points: same (r1, p1), p2 moved to the witness shell (sign kept)
+        sgn = np.where(p2 < 0, -1.0, 1.0)
+        self.wit_near = np.column_stack([self.grid[:, 0], p1, sgn * self.R2_near])
+        self.wit_far = np.column_stack([self.grid[:, 0], p1, sgn * self.R2_max])
 
     def _lam(self, e):
         return sym.lambdify(self.sv, e, modules=[CHI_MODULES, "numpy"])
@@ -213,7 +212,10 @@ class BlindJudge:
         return rho, P, f, G2
 
     def compile(self, expr):
-        """Lambdified (rho, P, f, G2) or None if structurally invalid."""
+        """One lambdified function returning the primitive fields
+        [rho, d rho/dx_i (all i), d2 rho/dp_b^2 (noise b), pt, d pt/dx_i, d2 pt/dp_b^2]
+        or None if structurally invalid. G2 is assembled numerically in
+        fields(): the symbolic product form is 10-50x slower to codegen."""
         sp = split_pair(expr)
         if sp is None:
             return None
@@ -223,40 +225,88 @@ class BlindJudge:
         if self.sv[2] not in pt.free_symbols:
             return None
         try:
-            return [self._lam(e) for e in self._pieces(rho, pt)]
+            prims = []
+            for e in (rho, pt):
+                prims.append(e)
+                prims.extend(sym.diff(e, s) for s in self.sv)
+                prims.extend(sym.diff(e, self.sv[b], 2) for b in self.noise)
+            return sym.lambdify(self.sv, prims, modules=[CHI_MODULES, "numpy"])
         except Exception:
             return None
 
-    def _eval(self, fns, X):
+    def _static(self, X):
+        """Grid-only fields (theta H, Q1, drift_i), cached per grid object."""
+        key = (id(X), X.shape)
+        st = getattr(self, "_static_cache", None)
+        if st is None or st[0] != key:
+            args = [X[:, i] for i in range(X.shape[1])]
+            n = X.shape[0]
+            with np.errstate(all="ignore"):
+                thH = np.broadcast_to(np.asarray(self._thH(*args), dtype=np.float64), (n,))
+                Q1 = np.broadcast_to(np.asarray(self._Q1(*args), dtype=np.float64), (n,))
+                dr = [np.broadcast_to(np.asarray(sym.lambdify(self.sv, d, "numpy")(*args),
+                                                 dtype=np.float64), (n,)) for d in self.drift]
+            self._static_cache = (key, thH, Q1, dr)
+        return self._static_cache[1:]
+
+    def _eval(self, fn, X):
         args = [X[:, i] for i in range(X.shape[1])]
         n = X.shape[0]
         with np.errstate(all="ignore"):
-            out = [np.broadcast_to(np.asarray(fn(*args), dtype=np.float64), (n,)) for fn in fns]
+            out = [np.broadcast_to(np.asarray(v, dtype=np.float64), (n,)) for v in fn(*args)]
         return out
+
+    def _assemble(self, prim, X):
+        """rho, P, f, G2 on X from the primitive fields (numpy)."""
+        th, noise, dim = self.theta, self.noise, len(self.sv)
+        nb = len(noise)
+        bidx = list(noise)
+        k = 1 + dim + nb
+        rho, r1, r2 = prim[0], prim[1:1 + dim], dict(zip(bidx, prim[1 + dim:k]))
+        pt, d1, d2 = prim[k], prim[k + 1:k + 1 + dim], dict(zip(bidx, prim[k + 1 + dim:2 * k]))
+        _, _, dr = self._static(X)
+        with np.errstate(all="ignore"):
+            Lpt = sum(dr[i] * d1[i] for i in range(dim)) + sum(noise[b] * d2[b] for b in bidx)
+            Lrho = sum(dr[i] * r1[i] for i in range(dim)) + sum(noise[b] * r2[b] for b in bidx)
+            P = pt * pt
+            f = th * P / 2
+            LP = 2 * pt * Lpt + 2 * sum(noise[b] * d1[b] ** 2 for b in bidx)
+            Lf = th * LP / 2
+            G2 = rho * (LP + P * Lf) + P * Lrho
+            for b in bidx:
+                kb = noise[b]
+                dP = 2 * pt * d1[b]
+                df = th * pt * d1[b]
+                G2 = G2 + rho * (P * kb * df * df + 2 * kb * dP * df) + 2 * kb * r1[b] * (dP + P * df)
+        return rho, P, f, G2
 
     def fields(self, expr, fns=None):
         """A-independent numeric fields on the grid (+ rho on the far shell),
         or None if invalid: no pair root, foreign symbols, ptilde without p2,
         rho < 0 or non-finite anywhere, non-finite pieces where rho > 0."""
-        fns = self.compile(expr) if fns is None else fns
-        if fns is None:
+        fn = self.compile(expr) if fns is None else fns
+        if fn is None:
             return None
         try:
-            rho_v, P_v, f_v, G2_v = self._eval(fns, self.grid)
-            thH, Q1 = self._eval([self._thH, self._Q1], self.grid)
-            rho_far = self._eval(fns[:1], self.far_shell)[0]
+            prim = self._eval(fn, self.grid)
+            rho_v, P_v, f_v, G2_v = self._assemble(prim, self.grid)
+            thH, Q1, _ = self._static(self.grid)
+            rho_wn = self._eval(fn, self.wit_near)[0]
+            rho_wf = self._eval(fn, self.wit_far)[0]
         except Exception:
             return None
-        if (np.any(~np.isfinite(rho_v)) or np.any(rho_v < 0)
-                or np.any(~np.isfinite(rho_far)) or np.any(rho_far < 0)):
-            return None
+        for arr in (rho_v, rho_wn, rho_wf):
+            if np.any(~np.isfinite(arr)) or np.any(arr < 0):
+                return None
+        witness = np.where(self.in_Mnear, rho_wn >= RHO_ONE, rho_wf >= RHO_ONE)
         active = rho_v > 0
         for arr in (P_v, f_v, G2_v):
             if np.any(~np.isfinite(arr[active])):
                 return None
-        with np.errstate(divide="ignore"):
+        with np.errstate(all="ignore"):
             log_rhoP = np.where(active & (P_v > 0), np.log(rho_v) + np.log(P_v), -np.inf)
-        return {"thH": thH, "Q1": Q1, "log_rhoP": log_rhoP, "rho": rho_v, "rho_far": rho_far,
+        return {"thH": thH, "Q1": Q1, "log_rhoP": log_rhoP, "rho": rho_v,
+                "rho_wn": rho_wn, "rho_wf": rho_wf, "witness": witness,
                 "f": np.where(active, f_v, 0.0), "G2": np.where(active, G2_v, 0.0)}
 
     def _weights(self, fl, A):
@@ -287,19 +337,25 @@ class BlindJudge:
         return -LV_over_V * (2.0 + lv)
 
     def exempt(self, fl):
-        return (self.in_Mmax & (fl["rho"] < RHO_ONE)) | self.box0
+        return (self.in_Mmax & (fl["rho"] < RHO_ONE) & fl["witness"]) | self.box0
 
     def score(self, fl, A):
-        """(pen, parts) or None if the ratio is non-finite somewhere."""
+        """(pen, parts) or None if the ratio is non-finite somewhere.
+        v_out: log-compressed drift violation outside K (mean of
+               log1p(max(c_t - ratio, 0)/c_t)), so rewards keep a gradient from
+               ratio ~ -1e6 up to feasibility instead of saturating at 0;
+        v_comp: fraction of shell/witness points with rho < 1;
+        v_in: fraction of exempt points violating (secondary: smaller K wins)."""
         r = self.ratio(fl, A)
         if not np.all(np.isfinite(r)):
             return None
         ex = self.exempt(fl)
-        rc = np.clip(r, -1e3, np.inf)
-        v_out = float(np.mean(np.maximum(self.c_t - rc[~ex], 0.0)) / self.c_t)
+        rc = np.clip(r, -1e6, np.inf)
+        v_out = float(np.mean(np.log1p(np.maximum(self.c_t - rc[~ex], 0.0) / self.c_t)))
         v_in = float(np.mean(r[ex] < self.c_t)) if ex.any() else 0.0
-        v_comp = 0.5 * (float(np.mean(fl["rho"][self.near_shell] < RHO_ONE))
-                        + float(np.mean(fl["rho_far"] < RHO_ONE)))
+        v_comp = (float(np.mean(fl["rho"][self.near_shell] < RHO_ONE))
+                  + float(np.mean(fl["rho_wn"][self.in_Mnear] < RHO_ONE))
+                  + float(np.mean(fl["rho_wf"][self.in_Mmax] < RHO_ONE))) / 3.0
         return v_out + v_comp + 0.1 * v_in, (v_out, v_comp, v_in)
 
     def penalty(self, expr):
@@ -432,7 +488,9 @@ def fl_blind_final_check(expr, spec, state_vars, drift, A, seed=0):
             return False
         r = ratio_fn(fl)
         bad = ~j.exempt(fl) & ~(r >= j.c_t)
-        shell_bad = (j.near_shell & (fl["rho"] < RHO_ONE))
+        shell_bad = ((j.near_shell & (fl["rho"] < RHO_ONE))
+                     | (j.in_Mnear & (fl["rho_wn"] < RHO_ONE))
+                     | (j.in_Mmax & (fl["rho_wf"] < RHO_ONE)))
         bad = bad | shell_bad
         if bad.any():
             i = int(np.argmin(np.where(bad, r, np.inf)))
@@ -450,8 +508,6 @@ def fl_blind_final_check(expr, spec, state_vars, drift, A, seed=0):
         for lo in range(0, X.shape[0], 1_000_000):
             if not scan(X[lo:lo + 1_000_000], lambda fl: j.ratio(fl, A)):
                 return False, None
-    if np.any(j._eval(fns[:1], j.far_shell)[0] < RHO_ONE):
-        return False, j.far_shell[0]
     # far region, high precision
     n_far = b.get("far_grid", (13, 12, 12))
     r = np.linspace(-np.pi, np.pi, n_far[0])
@@ -460,8 +516,10 @@ def fl_blind_final_check(expr, spec, state_vars, drift, A, seed=0):
     R, P1, P2 = np.meshgrid(r, p1, p2, indexing="ij")
     far = np.stack([R.ravel(), P1.ravel(), P2.ravel()], 1)
     j.set_grid(far)
-    rho_far = j._eval(fns[:1], far)[0]
-    ex = (j.in_Mmax & (rho_far < RHO_ONE)) | j.box0
+    rho_far = j._eval(fns, far)[0]
+    wit = np.where(j.in_Mnear, j._eval(fns, j.wit_near)[0] >= RHO_ONE,
+                   j._eval(fns, j.wit_far)[0] >= RHO_ONE)
+    ex = (j.in_Mmax & (rho_far < RHO_ONE) & wit) | j.box0
     pts = far[~ex]
     if len(pts):
         rf = ratio_mp_points(j, expr, pts, A, dps=int(b.get("dps", 30)))

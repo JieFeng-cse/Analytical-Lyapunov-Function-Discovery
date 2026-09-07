@@ -56,7 +56,7 @@ def shell_level(p1max):
     Pr = np.linspace(-p1max, p1max, 41)
     R, P1, P2 = np.meshgrid([0.0], Pr, levels, indexing="ij")
     G = np.stack([R.ravel(), P1.ravel(), P2.ravel()], 1)
-    rv = j._eval(fns[:1], G)[0].reshape(len(Pr), len(levels))
+    rv = j._eval(fns, G)[0].reshape(len(Pr), len(levels))
     # for each p1 the first level from which rho == 1 for all larger levels
     first = []
     for i in range(len(Pr)):
@@ -100,8 +100,10 @@ a = np.geomspace(0.25, P1max, n_far[1]); pp1 = np.concatenate([-a[::-1], [0.0], 
 pp2 = np.geomspace(P2MAX, 4.0 * R2_max, n_far[2]); pp2 = np.concatenate([-pp2[::-1], pp2])
 R, P1, P2 = np.meshgrid(rr, pp1, pp2, indexing="ij")
 far = np.stack([R.ravel(), P1.ravel(), P2.ravel()], 1)
-rho_far = j._eval(fns[:1], far)[0]
-ex = (far[:, 1]**2 <= M_max) & (rho_far < RHO_ONE)
+j.set_grid(far)
+rho_far = j._eval(fns, far)[0]
+wit = np.where(j.in_Mnear, j._eval(fns, j.wit_near)[0] >= RHO_ONE, j._eval(fns, j.wit_far)[0] >= RHO_ONE)
+ex = (far[:, 1]**2 <= M_max) & (rho_far < RHO_ONE) & wit
 rf = ratio_mp_points(j, expr, far[~ex], A_REF, dps=30)
 c_bulk_far = float(np.nanmin(rf))
 print(f"(e) far region outside band-K (mpmath): n={int((~ex).sum())} min ratio={c_bulk_far:+.4e}   [{time.time()-t0:.0f}s]", flush=True)
@@ -141,7 +143,7 @@ r = j.ratio(fl, A_REF)
 out = ~j.exempt(fl)
 c_D = float(np.min(r[out]))
 print(f"(e) D outside K: n={int(out.sum())} min ratio={c_D:+.4e} (c_t={c_t:.3e}); near shell rho<1: "
-      f"{int((fl['rho'][j.near_shell] < RHO_ONE).sum())}; far shell rho<1: {int((fl['rho_far'] < RHO_ONE).sum())}", flush=True)
+      f"{int((fl['rho'][j.near_shell] < RHO_ONE).sum())}; witness fails: {int((~fl['witness'] & j.in_Mmax).sum())}", flush=True)
 blind.update({"M_0_ref": M_0_ref, "R2_0_ref": R2_0_ref, "M_max_ref": M_max_ref, "R2_near_ref": R2_near_ref,
               "R2_max_ref": R2_max_ref, "c_ref": c_ref, "c_bulk_D": c_bulk_D, "c_bulk_far": c_bulk_far,
               "A_ref": A_REF, "scale": SCALE,
