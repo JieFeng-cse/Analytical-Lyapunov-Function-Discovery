@@ -88,68 +88,84 @@ p̃ ≈ p₂.
 
 The drift condition `LV + c·V/(2+log V) ≤ 0` holds at x iff `ratio(x) ≥ c`.
 
-### 3.2 Evaluation grid (fixed, calibrated)
+### 3.2 Exemption set, evaluation domain, shells (as built, 2026-09-07)
 
-Product grid, built once from the calibration JSON:
+A plain box K fails for this problem: the document's certificate at θ=0.1 must
+exempt the transition band for |p₁| ≤ 26, which reaches |p₂| ≈ 6.6×10⁵, while
+float64 cannot resolve the fast-branch drift of a *good* candidate beyond
+|p₂| ≈ 4×10⁴ (the true L p̃ ≈ 1/(2p̃³) is below cancellation noise; measured
+20 % error at 2×10⁵, 10⁻⁵ at 10⁴). So:
 
-* r₁: 25 points uniform in [−π, π].
-* p₁: 0, ±(geometric from 0.25 to P₁max, 24 values) → 49 values.
-* p₂: 0, ±(geometric from 0.25 to P₂max, 40 values) → 81 values.
-
-≈ 99k points. P₁max = 2·√M_max, P₂max = 4·R₂max (see §4). The grid is the same
-for every candidate and both arms (stage-mode lesson: a moving point set adds
-reward noise and defeats caching); train.py's harvest/bootstrap is skipped in
-blind mode exactly as in stage mode.
+* **Exemption set (candidate-dependent, the C36 shape)**
+  `K(ρ) = {p₁² ≤ M_max and ρ < 1 and WITNESS} ∪ {p₁² ≤ M_0 and |p₂| ≤ R2_0}`.
+  WITNESS(x): on the same (r₁, p₁) line, ρ = 1 at the witness shell |p₂| = R2_near
+  (if p₁² ≤ M_near) else at |p₂| = R2_max. A vanishing or infinitesimal gate
+  therefore exempts nothing.
+* **Scored domain** D = {|p₁| ≤ P1max, |p₂| ≤ P2max = 4×10⁴} (float64-trusted),
+  product grid r₁ × p₁ × p₂ = 17 × (2·16+1) × (2·32+1) ≈ 36k points, p₁/p₂ signed
+  geometric from 0.25. The same grid for every candidate and both arms.
+* **Compactness shells** (ρ must be 1): the near shell {p₁² ≤ M_near = 64,
+  R2_near ≤ |p₂| ≤ P2max} inside D, so the fast branch is scored there for
+  |p₁| ≤ 8 (order-3 counterterms plus a real gate are required at |p₂| ≈ 10⁴);
+  and both witness shells.
+* **Far region** |p₂| ∈ [P2max, 4·R2_max] is scored only in the final check, at 30
+  digits (mpmath), on a coarse grid outside K(ρ).
 
 ### 3.3 Score
 
-With K_max = {|p₁| ≤ √M_max and |p₂| ≤ R₂max} and target rate c_t:
-
 ```
-Ω_out = grid points outside K_max
-v_out = mean over Ω_out of  max(c_t − clip(ratio, −1e3, ∞), 0) / c_t
-v_in  = fraction of grid points inside K_max with ratio < c_t
-pen   = v_out + 0.1 · v_in
-reward = 1 / (1 + pen)
+v_out  = mean over D \ K(ρ) of log1p( max(c_t − ratio, 0) / c_t )   (ratio clipped at −1e6)
+v_comp = ( frac(ρ<1 on near shell) + frac(ρ<1 on near witnesses, p₁²≤M_near)
+         + frac(ρ<1 on far witnesses, p₁²≤M_max) ) / 3
+v_in   = frac(ratio < c_t on K(ρ))
+pen    = v_out + v_comp + 0.1·v_in ;   reward = 1 / (1 + pen)
 ```
 
-The clip keeps early candidates (ratios of −1e17) from flattening the signal;
-v_in is the "smaller K is better" secondary term from D3's discussion.
+The log compression keeps a gradient from ratio ≈ −10⁶ up to feasibility
+(a linear mean saturated every early reward at ≈ 10⁻⁶). Measured landscape on
+the reference ladder: trivial pair 0.18, gate only 0.15, order 1 0.17, order 2
+0.22, order 3 0.55, order 4 0.98; ρ ≡ 0 and ρ ≡ ε score 0.18.
 
-A is not searched: per candidate the judge evaluates the A-independent fields
-once and combines them for A ∈ {0.1, 1, 10, 100, 1000}; the reward is the best
-of the five. The chosen A is stored with the candidate for reporting.
+A is not searched: the A-independent fields are evaluated once and combined
+for A ∈ {0.1, 1, 10, 100, 1000}; the reward is the best of the five, the
+chosen A is stored on the program (`blind_A`).
 
-Invalid (reward = invalid_reward): root is not `pair`; ρ < 0 anywhere on the
-grid; any non-finite log V or LV/V at a point with ρ > 0; expression free
-symbols not ⊆ {x1, x2, x3}; p̃ has no dependence on p₂ (then T̂₂ cannot supply
-fast-branch drift — a cheap early reject, kept explicit so it is auditable).
+Invalid (reward = invalid_reward): root is not `pair`; ρ < 0 or non-finite
+anywhere on the grid or the witness shells; non-finite P, f, G2 where ρ > 0;
+free symbols not ⊆ {x1, x2, x3}; p̃ without p₂.
+
+Implementation note: only the primitives ρ, ∂ρ, ∂²ρ, p̃, ∂p̃, ∂²p̃ are lambdified
+(one call); G2 is assembled numerically. The symbolic product form was 30–100×
+slower to code-generate (0.03–0.5 s per candidate now, 1.2 s for the order-4
+reference).
 
 ### 3.4 Final check (train.py's `eval_all` gate, blind branch)
 
-A candidate with pen == 0 on the training grid is re-judged on (i) a 2× denser
-grid and (ii) 10 × 10⁶ uniform random points in {|p₁| ≤ P₁max, |p₂| ≤ P₂max}
-∖ K_max, both in the same log-domain form. Pass = every point satisfies
-ratio ≥ c_t. SHGO is not used (Piecewise-free but the log-domain objective is
-not smooth across ρ = 0; random search at 10⁷ points is the C44 idiom).
+A candidate with `success` (pen == 0 on the training grid) is re-judged on (i) a
+2× denser grid on D plus 10⁷ uniform random points in D, outside K(ρ), with
+the shell/witness conditions enforced pointwise; (ii) the far region
+|p₂| ∈ [P2max, 4·R2_max], |p₁| ≤ P1max, coarse grid (13 × 25 × 24) outside K(ρ),
+evaluated with mpmath at 30 digits in the same log-domain assembly. Pass =
+ratio ≥ c_t everywhere scored. No SHGO.
 
 ## 4. Calibration (`repro/blind_calibrate_rotor2.py`)
 
-Runs once, before any job:
+Runs once on the document's V (eq. 13–17, R_ρ = 20, θ = 0.1, A = 20):
 
-1. Build the document's V (eq. 13–17, `_chi(p₂²/S²)` with S = p₁⁴ + R_ρ,
-   R_ρ = 20 as in C36) at θ = 0.1, A = 20.
-2. Evaluate ratio on a wide grid (|p₁| ≤ 100, |p₂| ≤ 10⁵) with the §3.1 judge
-   (same code path — this is also the judge's acceptance test).
-3. Find the smallest box K_ref = {|p₁| ≤ √M_ref, |p₂| ≤ R₂ref} such that every
-   grid point outside it has ratio ≥ c_ref, scanning c_ref over
-   {θ²/4 · 2^{−k}} downward until K_ref exists (expected from the θ-scan:
-   transition band clean for |p₁| ≳ 24, fast branch clean for |p₂| ≳ 500).
-4. Write `example_config/blind_rotor2.json`:
-   `{"theta": 0.1, "M_max": 1.25²·M_ref, "R2_max": 1.25·R₂ref, "c_t": 0.5·c_ref,
-     "M_ref", "R2_ref", "c_ref", "A_ref": 20}`.
-   The 0.5 on c follows C4 (c = 0.3–0.5 × c*).
-5. Print the same table as C44 (region / min ratio / worst point) for the ledger.
+1. float64 domain D0 = {|p₁| ≤ 60, |p₂| ≤ 4×10⁴}: zero-level core box and the
+   bulk drift rate away from it (c_bulk_D).
+2. transition-band threshold in p₁ at 30 digits: last p₁ ∈ {10, …, 40} whose
+   band S < |p₂| < 2S violates → **p₁ = 26**, M_max_ref = 676.
+3. near shell: ρ = 1 for |p₁| ≤ 8 from |p₂| ≥ 8407 (R2_near_ref); far shell:
+   ρ = 1 for |p₁| ≤ √M_max from |p₂| ≥ 2.33×10⁶ (R2_max_ref).
+4. far-region bulk rate at 30 digits (c_bulk_far); c_ref = min(c_bulk_D,
+   c_bulk_far) = 1.71×10⁻³; **c_t = 0.5·c_ref = 8.56×10⁻⁴** (C4 rule).
+5. dense core scan at the c_t level (161 × 321 grid + 5×10⁵ random points):
+   M_0_ref = 9.24, R2_0_ref = 211.
+6. scaling 1.25 (M: 1.25², lengths: 1.25): **M_max = 1056, R2_max = 2.91×10⁶,
+   R2_near = 1.05×10⁴, M_0 = 14.4, R2_0 = 264, P1max = 1.5·√M_max = 48.75.**
+7. the reference is run through `fl_blind_final_check` with these numbers
+   (must pass) and the JSON `example_config/blind_rotor2.json` is written.
 
 The reference expression itself is never written into the JSON or the run dir.
 
