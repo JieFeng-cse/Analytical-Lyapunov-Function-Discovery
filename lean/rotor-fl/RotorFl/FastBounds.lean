@@ -16,8 +16,17 @@ lemma abs_t1_le (r p₁ : ℝ) : |t₁ r p₁| ≤ (1 : ℝ) * |p₁| ^ 0 := by
   have h0 := abs_le.mp (abs_mono_le (1 : ℝ) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   exact abs_le.mpr ⟨by linarith [h0.1, h0.2], by linarith [h0.1, h0.2]⟩
 
+lemma abs_t1_r_le (r p₁ : ℝ) : |t1_r r p₁| ≤ (1 : ℝ) * |p₁| ^ 0 := by
+  unfold t1_r
+  have h0 := abs_le.mp (abs_mono_le (-(1 : ℝ)) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 1 0 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  exact abs_le.mpr ⟨by linarith [h0.1, h0.2], by linarith [h0.1, h0.2]⟩
+
 lemma abs_t1_p₁_le (r p₁ : ℝ) : |t1_p₁ r p₁| ≤ (0 : ℝ) := by
   unfold t1_p₁
+  simp
+
+lemma abs_t1_p₁p₁_le (r p₁ : ℝ) : |t1_p₁p₁ r p₁| ≤ (0 : ℝ) := by
+  unfold t1_p₁p₁
   simp
 
 lemma abs_t2_le (r p₁ : ℝ) : |t₂ r p₁| ≤ (1 : ℝ) * |p₁| ^ 1 := by
@@ -25,10 +34,19 @@ lemma abs_t2_le (r p₁ : ℝ) : |t₂ r p₁| ≤ (1 : ℝ) * |p₁| ^ 1 := by
   have h0 := abs_le.mp (abs_mono_le (1 : ℝ) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 1 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   exact abs_le.mpr ⟨by linarith [h0.1, h0.2], by linarith [h0.1, h0.2]⟩
 
+lemma abs_t2_r_le (r p₁ : ℝ) : |t2_r r p₁| ≤ (1 : ℝ) * |p₁| ^ 1 := by
+  unfold t2_r
+  have h0 := abs_le.mp (abs_mono_le (-(1 : ℝ)) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 1 1 0 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  exact abs_le.mpr ⟨by linarith [h0.1, h0.2], by linarith [h0.1, h0.2]⟩
+
 lemma abs_t2_p₁_le (r p₁ : ℝ) : |t2_p₁ r p₁| ≤ (1 : ℝ) * |p₁| ^ 0 := by
   unfold t2_p₁
   have h0 := abs_le.mp (abs_mono_le (1 : ℝ) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   exact abs_le.mpr ⟨by linarith [h0.1, h0.2], by linarith [h0.1, h0.2]⟩
+
+lemma abs_t2_p₁p₁_le (r p₁ : ℝ) : |t2_p₁p₁ r p₁| ≤ (0 : ℝ) := by
+  unfold t2_p₁p₁
+  simp
 
 lemma abs_t3_le (r p₁ : ℝ) : |t₃ r p₁| ≤ (1 : ℝ) * |p₁| ^ 0 + (1 : ℝ) * |p₁| ^ 1 + (1 : ℝ) * |p₁| ^ 2 := by
   unfold t₃
@@ -37,11 +55,23 @@ lemma abs_t3_le (r p₁ : ℝ) : |t₃ r p₁| ≤ (1 : ℝ) * |p₁| ^ 0 + (1 :
   have h2 := abs_le.mp (abs_mono_le (1 : ℝ) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 2 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   exact abs_le.mpr ⟨by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2], by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2]⟩
 
+lemma abs_t3_r_le (r p₁ : ℝ) : |t3_r r p₁| ≤ (2 : ℝ) * |p₁| ^ 0 + (1 : ℝ) * |p₁| ^ 1 + (1 : ℝ) * |p₁| ^ 2 := by
+  unfold t3_r
+  have h0 := abs_le.mp (abs_mono_le (1 : ℝ) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 1 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h1 := abs_le.mp (abs_mono_le (-(1 : ℝ)) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 2 1 0 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h2 := abs_le.mp (abs_mono_le (-(2 : ℝ)) (2 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 1 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  exact abs_le.mpr ⟨by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2], by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2]⟩
+
 lemma abs_t3_p₁_le (r p₁ : ℝ) : |t3_p₁ r p₁| ≤ (1 : ℝ) * |p₁| ^ 0 + (2 : ℝ) * |p₁| ^ 1 := by
   unfold t3_p₁
   have h0 := abs_le.mp (abs_mono_le (2 : ℝ) (2 : ℝ) p₁ (Real.sin r) (Real.cos r) 1 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   have h1 := abs_le.mp (abs_mono_le (1 : ℝ) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 1 0 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   exact abs_le.mpr ⟨by linarith [h0.1, h0.2, h1.1, h1.2], by linarith [h0.1, h0.2, h1.1, h1.2]⟩
+
+lemma abs_t3_p₁p₁_le (r p₁ : ℝ) : |t3_p₁p₁ r p₁| ≤ (2 : ℝ) * |p₁| ^ 0 := by
+  unfold t3_p₁p₁
+  have h0 := abs_le.mp (abs_mono_le (2 : ℝ) (2 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  exact abs_le.mpr ⟨by linarith [h0.1, h0.2], by linarith [h0.1, h0.2]⟩
 
 lemma abs_t4_le (r p₁ : ℝ) : |t₄ r p₁| ≤ ((5 : ℝ) / (2 : ℝ)) * |p₁| ^ 0 + (4 : ℝ) * |p₁| ^ 1 + (3 : ℝ) * |p₁| ^ 2 + (1 : ℝ) * |p₁| ^ 3 := by
   unfold t₄
@@ -53,6 +83,17 @@ lemma abs_t4_le (r p₁ : ℝ) : |t₄ r p₁| ≤ ((5 : ℝ) / (2 : ℝ)) * |p�
   have h5 := abs_le.mp (abs_mono_le (-((1 : ℝ) / (2 : ℝ))) ((1 : ℝ) / (2 : ℝ)) p₁ (Real.sin r) (Real.cos r) 0 1 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   exact abs_le.mpr ⟨by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2, h3.1, h3.2, h4.1, h4.2, h5.1, h5.2], by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2, h3.1, h3.2, h4.1, h4.2, h5.1, h5.2]⟩
 
+lemma abs_t4_r_le (r p₁ : ℝ) : |t4_r r p₁| ≤ (3 : ℝ) * |p₁| ^ 0 + (7 : ℝ) * |p₁| ^ 1 + (3 : ℝ) * |p₁| ^ 2 + (1 : ℝ) * |p₁| ^ 3 := by
+  unfold t4_r
+  have h0 := abs_le.mp (abs_mono_le ((1 : ℝ) / (2 : ℝ)) ((1 : ℝ) / (2 : ℝ)) p₁ (Real.sin r) (Real.cos r) 0 2 0 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h1 := abs_le.mp (abs_mono_le (2 : ℝ) (2 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h2 := abs_le.mp (abs_mono_le (-((1 : ℝ) / (2 : ℝ))) ((1 : ℝ) / (2 : ℝ)) p₁ (Real.sin r) (Real.cos r) 0 0 2 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h3 := abs_le.mp (abs_mono_le (1 : ℝ) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 3 1 0 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h4 := abs_le.mp (abs_mono_le (-(1 : ℝ)) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 1 1 0 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h5 := abs_le.mp (abs_mono_le (-(3 : ℝ)) (3 : ℝ) p₁ (Real.sin r) (Real.cos r) 2 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h6 := abs_le.mp (abs_mono_le (6 : ℝ) (6 : ℝ) p₁ (Real.sin r) (Real.cos r) 1 1 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  exact abs_le.mpr ⟨by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2, h3.1, h3.2, h4.1, h4.2, h5.1, h5.2, h6.1, h6.2], by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2, h3.1, h3.2, h4.1, h4.2, h5.1, h5.2, h6.1, h6.2]⟩
+
 lemma abs_t4_p₁_le (r p₁ : ℝ) : |t4_p₁ r p₁| ≤ (4 : ℝ) * |p₁| ^ 0 + (6 : ℝ) * |p₁| ^ 1 + (3 : ℝ) * |p₁| ^ 2 := by
   unfold t4_p₁
   have h0 := abs_le.mp (abs_mono_le (-(3 : ℝ)) (3 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 0 2 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
@@ -60,6 +101,12 @@ lemma abs_t4_p₁_le (r p₁ : ℝ) : |t4_p₁ r p₁| ≤ (4 : ℝ) * |p₁| ^ 
   have h2 := abs_le.mp (abs_mono_le (-(3 : ℝ)) (3 : ℝ) p₁ (Real.sin r) (Real.cos r) 2 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   have h3 := abs_le.mp (abs_mono_le (1 : ℝ) (1 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
   exact abs_le.mpr ⟨by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2, h3.1, h3.2], by linarith [h0.1, h0.2, h1.1, h1.2, h2.1, h2.2, h3.1, h3.2]⟩
+
+lemma abs_t4_p₁p₁_le (r p₁ : ℝ) : |t4_p₁p₁ r p₁| ≤ (6 : ℝ) * |p₁| ^ 0 + (6 : ℝ) * |p₁| ^ 1 := by
+  unfold t4_p₁p₁
+  have h0 := abs_le.mp (abs_mono_le (-(6 : ℝ)) (6 : ℝ) p₁ (Real.sin r) (Real.cos r) 0 1 0 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  have h1 := abs_le.mp (abs_mono_le (-(6 : ℝ)) (6 : ℝ) p₁ (Real.sin r) (Real.cos r) 1 0 1 (by norm_num) (abs_sin_le_one r) (abs_cos_le_one r))
+  exact abs_le.mpr ⟨by linarith [h0.1, h0.2, h1.1, h1.2], by linarith [h0.1, h0.2, h1.1, h1.2]⟩
 
 lemma abs_c4_le (r p₁ : ℝ) : |c4 r p₁| ≤ (13 : ℝ) * |p₁| ^ 0 + (22 : ℝ) * |p₁| ^ 1 + (19 : ℝ) * |p₁| ^ 2 + (6 : ℝ) * |p₁| ^ 3 + (1 : ℝ) * |p₁| ^ 4 := by
   unfold c4

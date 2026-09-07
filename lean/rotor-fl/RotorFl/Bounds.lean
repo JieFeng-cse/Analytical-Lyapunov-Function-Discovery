@@ -29,6 +29,11 @@ structure FastU (p₁ u : ℝ) : Prop where
   small : |u| ≤ 1 / 1999
   gate : |u| * (2 * p₁ ^ 4 + 40) ≤ 1
 
+/-- The two smallness facts the estimates actually use. -/
+structure SmallU (p₁ u : ℝ) : Prop where
+  small : |u| ≤ 1 / 1999
+  abs_mul : |p₁| * |u| ≤ 3 / 1000
+
 /-- `(|p₁| · |u|)⁴ ≤ |u|³ / 2`, hence `|p₁| · |u| ≤ 3/1000`. -/
 lemma FastU.abs_mul_le {p₁ u : ℝ} (h : FastU p₁ u) : |p₁| * |u| ≤ 3 / 1000 := by
   have hu : 0 ≤ |u| := abs_nonneg u
@@ -47,5 +52,7 @@ lemma FastU.abs_mul_le {p₁ u : ℝ} (h : FastU p₁ u) : |p₁| * |u| ≤ 3 / 
     pow_lt_pow_left₀ hcon (by norm_num) (by norm_num)
   norm_num at this hprod
   linarith
+
+lemma FastU.smallU {p₁ u : ℝ} (h : FastU p₁ u) : SmallU p₁ u := ⟨h.small, h.abs_mul_le⟩
 
 end RotorFl

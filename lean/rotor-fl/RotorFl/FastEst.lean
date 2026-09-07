@@ -96,11 +96,11 @@ lemma H_split {r p₁ p₂ : ℝ} (h₂ : p₂ ≠ 0) :
 /-! ## Numerical bounds in terms of `v = |u|`, `m = |p₁|·|u|` -/
 
 section bounds
-variable {r p₁ u : ℝ} (hU : FastU p₁ u)
+variable {r p₁ u : ℝ} (hU : SmallU p₁ u)
 include hU
 
 lemma abs_Dc_le : |Dc r p₁ u| ≤ (1 + 1 / 200) * |u| := by
-  have hm := hU.abs_mul_le
+  have hm := hU.abs_mul
   have hv := hU.small
   have hv0 := abs_nonneg u
   have ha0 := abs_nonneg p₁
@@ -139,7 +139,7 @@ lemma abs_Dc_le : |Dc r p₁ u| ≤ (1 + 1 / 200) * |u| := by
         exact mul_le_mul_of_nonneg_left this hv0 |>.trans_eq (by ring)
 
 lemma abs_Wc_le : |Wc r p₁ u| ≤ 1 / 250 := by
-  have hm := hU.abs_mul_le
+  have hm := hU.abs_mul
   have hv := hU.small
   have hv0 := abs_nonneg u
   have ha0 := abs_nonneg p₁
@@ -192,8 +192,8 @@ lemma ptf_p₁_eq {r p₁ p₂ : ℝ} (h₂ : p₂ ≠ 0) :
 
 lemma abs_ptf_p₁_le {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
     |ptf_p₁ r p₁ p₂| ≤ (1 + 1 / 100) * (1 / p₂) ^ 2 := by
-  have hU := h.fastU
-  have hm := hU.abs_mul_le
+  have hU := h.fastU.smallU
+  have hm := hU.abs_mul
   have hv := hU.small
   have hv0 := abs_nonneg (1 / p₂)
   have ha0 := abs_nonneg p₁
@@ -227,7 +227,7 @@ lemma abs_ptf_p₁_le {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
 /-- `q = p̃f · u` is within `3·10⁻⁷` of 1. -/
 lemma abs_q_sub_one_le {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
     |ptf r p₁ p₂ * (1 / p₂) - 1| ≤ 3 / 10000000 := by
-  have hU := h.fastU
+  have hU := h.fastU.smallU
   have hv := hU.small
   have hv0 := abs_nonneg (1 / p₂)
   have hD := abs_Dc_le (r := r) hU

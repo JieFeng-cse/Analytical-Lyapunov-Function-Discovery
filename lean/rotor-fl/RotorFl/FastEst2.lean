@@ -154,7 +154,7 @@ lemma expH_eq {r p₁ p₂ : ℝ} (h₂ : p₂ ≠ 0) :
 lemma X_bounds {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
     1 + θ * (p₁ ^ 2 / 2 + 249 / 250) ≤ exp (θ * (p₁ ^ 2 / 2 + 1 + Wc r p₁ (1 / p₂)))
     ∧ exp (θ * (p₁ ^ 2 / 2 + 1 + Wc r p₁ (1 / p₂))) ≤ exp (θ * (p₁ ^ 2 / 2 + 251 / 250)) := by
-  have hW := abs_le.mp (abs_Wc_le (r := r) h.fastU)
+  have hW := abs_le.mp (abs_Wc_le (r := r) h.fastU.smallU)
   have hθ : θ = 1 / 50 := rfl
   constructor
   · calc 1 + θ * (p₁ ^ 2 / 2 + 249 / 250) ≤ 1 + θ * (p₁ ^ 2 / 2 + 1 + Wc r p₁ (1 / p₂)) := by

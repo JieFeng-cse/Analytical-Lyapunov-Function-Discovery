@@ -224,7 +224,9 @@ def rotor2_fast_export():
 
     for j, tj in t.items():
         bnd += bound_lemma(f"t{j}", tj, subs[j])
+        bnd += bound_lemma(f"t{j}_r", deriv[j]["r"], f"t{j}_r")
         bnd += bound_lemma(f"t{j}_p₁", deriv[j]["p₁"], f"t{j}_p₁")
+        bnd += bound_lemma(f"t{j}_p₁p₁", deriv[j]["p₁p₁"], f"t{j}_p₁p₁")
     bnd += bound_lemma("c4", coeffs[4], "c4")
     bnd += bound_lemma("c5", coeffs[5], "c5")
     bnd += "end RotorFl\n"
