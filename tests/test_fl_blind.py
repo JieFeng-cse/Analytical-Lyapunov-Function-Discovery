@@ -1,0 +1,91 @@
+import numpy as np
+import sympy as sym
+from example_config.rotor_common import make_rotor
+from utils.fl_blind import (Chi, CHI_MODULES, BlindJudge, reference_pair, split_pair,
+                            ratio_mp_points, fl_blind_final_check, RHO_ONE)
+
+# provisional numbers of the same shape as example_config/blind_rotor2.json
+SPEC_BLIND = {"theta": 0.1, "P1max": 40.0, "P2max": 4e4, "M_max": 985.0, "R2_max": 2.5e6,
+              "M_near": 64.0, "R2_near": 1.03e4, "M_0": 12.0, "R2_0": 250.0, "c_t": 5e-4,
+              "A_grid": [0.1, 1, 10, 100, 1000], "grid_coarse": True}
+
+
+def _spec():
+    sv, drift, spec = make_rotor(2)
+    spec = dict(spec)
+    spec["blind"] = dict(SPEC_BLIND)
+    return spec, sv, drift
+
+
+def _judge():
+    spec, sv, drift = _spec()
+    return BlindJudge(spec, sv, drift), sv
+
+
+def test_chi_derivatives_match_fd():
+    z = sym.Symbol("z")
+    f = sym.lambdify(z, Chi(z), modules=[CHI_MODULES, "numpy"])
+    d1 = sym.lambdify(z, sym.diff(Chi(z), z), modules=[CHI_MODULES, "numpy"])
+    d2 = sym.lambdify(z, sym.diff(Chi(z), z, 2), modules=[CHI_MODULES, "numpy"])
+    zs = np.linspace(-1, 2, 301)
+    h = 1e-5
+    fd1 = (f(zs + h) - f(zs - h)) / (2 * h)
+    fd2 = (f(zs + h) - 2 * f(zs) + f(zs - h)) / h**2
+    assert np.allclose(d1(zs), fd1, atol=1e-5)
+    assert np.allclose(d2(zs), fd2, atol=1e-3)
+    assert d1(-0.5) == 0 and d1(1.5) == 0 and d2(-0.5) == 0 and f(2.0) == 1.0
+
+
+def test_split_pair_and_invalid_shapes():
+    judge, sv = _judge()
+    x1, x2, x3 = sv
+    pair = sym.Function("pair")
+    step = sym.Function("step")
+    assert split_pair(pair(step(x3), x3)) is not None
+    assert split_pair(step(x3)) is None
+    assert judge.penalty(step(x3))[2] is False                      # no pair root
+    assert judge.penalty(pair(-step(x3**2 - 4), x3))[2] is False    # rho < 0
+    assert judge.penalty(pair(step(x3**2 - 4), x2))[2] is False     # ptilde without p2
+    pen, A, ok = judge.penalty(pair(step(x3**2 - 4), 5 * x3))       # overflow probe
+    assert ok and np.isfinite(pen)
+    pen0, A0, ok0 = judge.penalty(pair(sym.Integer(0) * x3 + step(x3 - x3), x3))  # rho == 0
+    assert ok0 and np.isfinite(pen0) and pen0 > 0.5                 # shells violated
+
+
+def test_reference_matches_mpmath():
+    judge, sv = _judge()
+    expr = reference_pair()
+    assert judge.fields(expr) is not None
+    pts = np.array([[0.3, 5.0, 10.0], [0.3, 5.0, 900.0], [0.3, 2.0, 100.0],
+                    [1.0, 0.5, 40.0], [-2.0, 3.0, 300.0], [0.0, 1.0, 0.0]])
+    r_num = judge.ratio_at(expr, pts, A=20.0)
+    r_ref = judge.ratio_mpmath(expr, pts, A=20.0, dps=40)
+    ok = np.isfinite(r_ref)
+    assert ok.sum() >= 5
+    assert np.allclose(r_num[ok], r_ref[ok], rtol=1e-6, atol=1e-12)
+    # log-domain mpmath path agrees with the float path where float64 is trusted
+    pts2 = np.array([[0.3, 5.0, 2000.0], [0.3, 5.0, 1e4], [1.0, 0.5, 40.0]])
+    r_mp = ratio_mp_points(judge, expr, pts2, A=20.0, dps=30)
+    assert np.allclose(judge.ratio_at(expr, pts2, A=20.0), r_mp, rtol=1e-4)
+
+
+def test_reference_passes_and_truncation_fails():
+    judge, sv = _judge()
+    pen4, A4, ok4 = judge.penalty(reference_pair(order=4))
+    pen1, A1, ok1 = judge.penalty(reference_pair(order=1))
+    assert ok4 and ok1
+    v_out, v_comp, v_in = judge.last_parts if A4 == judge.A_grid[-1] else judge.last_parts
+    fl = judge.fields(reference_pair(order=4))
+    s4 = judge.score(fl, A4)
+    assert s4[1][0] == 0.0 and s4[1][1] == 0.0          # no drift violation outside K, shells ok
+    assert pen4 <= 0.1                                  # only the secondary v_in term
+    assert pen1 > 1.0
+
+
+def test_final_check_reference():
+    spec, sv, drift = _spec()
+    spec["blind"].update(n_random=20000, dense=False, far_grid=(5, 4, 4), dps=30)
+    ok, worst = fl_blind_final_check(reference_pair(order=4), spec, sv, drift, A=20.0)
+    assert ok, worst
+    ok1, _ = fl_blind_final_check(reference_pair(order=1), spec, sv, drift, A=20.0)
+    assert not ok1
