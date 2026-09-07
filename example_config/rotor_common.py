@@ -15,6 +15,12 @@ from omegaconf import OmegaConf
 # Guided-template mode (CONCLUSIONS C8): LYA_FL_TEMPLATE=1 switches the run to
 # slot search inside the fixed reference scaffold (utils/fl_scaffold.py).
 FL_TEMPLATE = os.environ.get("LYA_FL_TEMPLATE", "") == "1"
+# Blind skeleton search (CONCLUSIONS C45, spec 2026-09-07): LYA_FL_BLIND=1
+# searches pair(rho, ptilde) with only the three-term skeleton of V known.
+FL_BLIND = os.environ.get("LYA_FL_BLIND", "") == "1"
+assert not (FL_BLIND and FL_TEMPLATE), "LYA_FL_BLIND and LYA_FL_TEMPLATE are mutually exclusive"
+BLIND_FUNCTION_SET = ["add", "sub", "mul", "div", "sin", "cos", "exp", "n2", "step", "pair", "1", "2"]
+BLIND_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blind_rotor2.json")
 
 # R by the zero-search fallback rule R ~ 10+5N on the +-15 momentum box
 # (CONCLUSIONS C1/C2); provisional until the V_ref calibration script lands.
@@ -43,10 +49,24 @@ def _slot_prior_overrides():
     }
 
 
-def apply_slot_overrides(cfg):
-    """Mutate a config_factory() dict for template mode. No-op otherwise."""
-    if not FL_TEMPLATE:
+def apply_blind_overrides(cfg):
+    """Mutate a config_factory() dict for blind mode (spec 2026-09-07 section 2)."""
+    if not FL_BLIND:
         return cfg
+    cfg["task"]["function_set"] = list(BLIND_FUNCTION_SET)
+    cfg["prior"]["root"] = {"token": "pair", "on": True}
+    cfg["prior"]["length"] = {"min_": 5, "max_": 60, "on": True}
+    cfg["prior"]["soft_length"] = {"loc": 28, "scale": 8, "on": True}
+    cfg["prior"]["const"] = {"on": False}
+    cfg["prior"].pop("repeat", None)
+    return cfg
+
+
+def apply_slot_overrides(cfg):
+    """Mutate a config_factory() dict for template mode. No-op otherwise
+    (blind mode applies its own overrides here as well)."""
+    if not FL_TEMPLATE:
+        return apply_blind_overrides(cfg)
     stage = int(os.environ.get("LYA_FL_STAGE", "1"))
     want_const = os.environ.get("LYA_FL_CONST", "1" if stage >= 4 else "0") == "1"
     cfg["task"]["function_set"] = list(
@@ -101,4 +121,9 @@ def make_rotor(N):
                                     for k, v in _json.loads(frozen_env).items()}
         else:
             spec["frozen_slots"] = {}
+    if FL_BLIND:
+        import json as _json
+        assert N == 2, "blind mode is calibrated for N=2 only (example_config/blind_rotor2.json)"
+        with open(BLIND_JSON) as fh:
+            spec["blind"] = _json.load(fh)
     return list(xs), drift_r + drift_p, spec

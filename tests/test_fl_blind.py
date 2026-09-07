@@ -89,3 +89,15 @@ def test_final_check_reference():
     assert ok, worst
     ok1, _ = fl_blind_final_check(reference_pair(order=1), spec, sv, drift, A=20.0)
     assert not ok1
+
+
+def test_calibration_json_loads():
+    import json
+    import os
+    p = os.path.join(os.path.dirname(__file__), "..", "example_config", "blind_rotor2.json")
+    assert os.path.exists(p)
+    d = json.load(open(p))
+    for k in BlindJudge.KEYS + ("A_grid", "c_ref", "M_max_ref", "R2_near_ref", "R2_max_ref"):
+        assert k in d
+    assert d["theta"] == 0.1 and d["M_max"] > d["M_max_ref"] and d["c_t"] < d["c_ref"]
+    assert d["R2_near"] < d["P2max"] < d["R2_max"]

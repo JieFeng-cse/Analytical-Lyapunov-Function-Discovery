@@ -251,6 +251,18 @@ class RegressionTask(HierarchicalTask):
         from utils.fl_scaffold import fl_V_and_LV
         state_vars, drift = dynamics()
         spec = generator_spec()
+        if spec.get("blind") is not None:
+            # Blind skeleton search (spec 2026-09-07): score pair(rho, ptilde)
+            # with the out-of-box log-domain judge; never execute()/y_hat.
+            from utils.fl_blind import fl_blind_penalty
+            try:
+                pen, A, ok = fl_blind_penalty(p.sympy_expr[0], spec, state_vars, drift)
+            except Exception:
+                return self.invalid_reward
+            if not ok:
+                return self.invalid_reward
+            p.blind_A = A
+            return 1.0 / (1.0 + pen)
         template = spec.get("scaffold") is not None
         stage_mode = template and spec.get("stage")
         if stage_mode:
@@ -309,6 +321,17 @@ class RegressionTask(HierarchicalTask):
             from utils.fl_scaffold import fl_V_and_LV
             state_vars, drift = dynamics()
             spec = generator_spec()
+            if spec.get("blind") is not None:
+                from utils.fl_blind import fl_blind_penalty
+                try:
+                    pen, A, ok = fl_blind_penalty(p.sympy_expr[0], spec, state_vars, drift)
+                except Exception:
+                    pen, A, ok = None, None, False
+                nmse_test = pen if ok else 1e6
+                if ok:
+                    p.blind_A = A
+                return {"nmse_test": nmse_test, "nmse_test_noiseless": nmse_test,
+                        "success": bool(ok and pen == 0.0)}
             template = spec.get("scaffold") is not None
             stage_mode = template and spec.get("stage")
             y_hat = None if stage_mode else p.execute(self.X_test)

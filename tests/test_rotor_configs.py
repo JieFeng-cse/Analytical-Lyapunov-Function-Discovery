@@ -40,3 +40,25 @@ def test_csv_row(sys, expected):
             assert (lo, hi) == (-3.14, 3.14)
         else:
             assert (lo, hi) == (-6, 6)
+
+
+def test_blind_mode_config(monkeypatch):
+    import sys
+    monkeypatch.setenv("LYA_FL_BLIND", "1")
+    monkeypatch.delenv("LYA_FL_TEMPLATE", raising=False)
+    for m in ["example_config.rotor_common", "example_config.config_rotor2"]:
+        sys.modules.pop(m, None)
+    try:
+        m = importlib.import_module("example_config.config_rotor2")
+        conf = m.config_factory()
+        assert conf["task"]["function_set"] == ["add", "sub", "mul", "div", "sin", "cos",
+                                                "exp", "n2", "step", "pair", "1", "2"]
+        assert conf["prior"]["root"] == {"token": "pair", "on": True}
+        assert conf["prior"]["length"]["max_"] == 60 and conf["prior"]["const"]["on"] is False
+        spec = m.generator_spec()
+        assert spec["blind"]["theta"] == 0.1 and "scaffold" not in spec
+        for k in ["P1max", "P2max", "M_max", "R2_max", "M_near", "R2_near", "M_0", "R2_0", "c_t"]:
+            assert k in spec["blind"]
+    finally:
+        for mm in ["example_config.rotor_common", "example_config.config_rotor2"]:
+            sys.modules.pop(mm, None)
