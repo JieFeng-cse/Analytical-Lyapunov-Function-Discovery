@@ -1,7 +1,7 @@
 /-
 # Fast region Ω₃ — part 1: setup and elementary estimates
 
-Hypotheses of the fast region outside K: `2S < |p₂|` (gate strictly open) and
+Hypotheses of the fast region outside K: `2S ≤ |p₂|` (gate saturated, boundary included) and
 `H > R`. Consequences used everywhere below, with `u = 1/p₂`, `a = |p₁|`:
 
 * `|p₂| ≥ 1999`, `p₂ ≠ 0`, `FastU p₁ u` (so `a·|u| ≤ 3/1000`);
@@ -18,7 +18,7 @@ open Real
 
 /-- Fast-region point outside K. -/
 structure FastPt (r p₁ p₂ : ℝ) : Prop where
-  gate : 2 * S p₁ < |p₂|
+  gate : 2 * S p₁ ≤ |p₂|
   energy : Rex < H r p₁ p₂
 
 namespace FastPt

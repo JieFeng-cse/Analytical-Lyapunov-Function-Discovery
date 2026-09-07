@@ -9,6 +9,7 @@ and the bracket is ≤ 0 by the real-arithmetic lemma `fast_key`
 (cases `p₁² ≤ 2`, `2 ≤ p₁² ≤ 30.25`, `p₁² ≥ 30.25`).
 -/
 import RotorFl.FastMain0
+import RotorFl.GenForm
 
 namespace RotorFl
 
@@ -18,7 +19,7 @@ theorem fast_region {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
     L V r p₁ p₂ + φ (V r p₁ p₂) ≤ 0 := by
   have h₂ := h.p₂_ne
   have hU := h.fastU
-  rw [L_V_eq_L_Vf h.gate, L_Vf r p₁ p₂ h₂]
+  rw [L_V_eq_L_Vf_of_le h.gate, L_Vf r p₁ p₂ h₂]
   have hT2 := term2_le h
   have hT3 := term3_le h
   have hφ := φ_le h

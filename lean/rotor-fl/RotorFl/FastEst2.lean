@@ -175,7 +175,7 @@ theorem φ_le {r p₁ p₂ : ℝ} (h : FastPt r p₁ p₂) :
   have h₂ := h.p₂_ne
   have hq := abs_le.mp (abs_q_sub_one_le h)
   have hp := h.abs_p₂_ge
-  rw [V_eq_Vf h.gate.le]
+  rw [V_eq_Vf h.gate]
   unfold Vf φ
   set p := ptf r p₁ p₂ with hp_def
   set E := exp (θ / 2 * p ^ 2) with hE
