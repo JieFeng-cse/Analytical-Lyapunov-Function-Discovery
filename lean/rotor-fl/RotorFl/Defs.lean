@@ -38,8 +38,9 @@ noncomputable def A : ℝ := 20
 noncomputable def Rρ : ℝ := 20
 /-- Drift rate c = 5·10⁻⁵ (C44: true rate is ≈ θ²/4; margin for crude bounds). -/
 noncomputable def cRate : ℝ := 1 / 20000
-/-- Energy exemption R = 1.25·10⁵ (|p₂| ≥ 500 outside). -/
-noncomputable def Rex : ℝ := 125000
+/-- Energy exemption R = 2·10⁶ (|p₂| ≥ 2000 outside on the fast branch; chosen
+so that crude triangle-inequality bounds on c₄, c₅ suffice, see spec §9). -/
+noncomputable def Rex : ℝ := 2000000
 /-- Endpoint-momentum exemption M = 10⁴ (|p₁| ≥ 100 outside the gate part). -/
 noncomputable def Mex : ℝ := 10000
 
