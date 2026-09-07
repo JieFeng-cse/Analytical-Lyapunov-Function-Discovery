@@ -862,7 +862,7 @@ R2_near = 1.05e4，M₀ = 14.4，R₂₀ = 264，P1max = 48.75，P2max = 4e4**�
 冒烟必须上 gpu-debug。测试：`tests/test_fl_blind.py`、`test_blind_priors.py`、
 `test_blind_tokens.py`、`test_rotor_configs.py::test_blind_mode_config`。
 **作业**（2026-09-07 提交）：冒烟 gpu-debug 20471334（transformer）/ 20471335
-（diffusion），LYA_NSAMPLES=1500；正式 16 h 20471455（transformer）/ 20471456
+（diffusion），LYA_NSAMPLES=1500；正式 6 h（原 16 h 作业 20471455/56 因排队改短重提）20473110（transformer）/ 20473111
 （diffusion），LYA_NSAMPLES=20000，run dir
 `/anvil/scratch/x-cchen47/LyaDis/runs_rotor_blind/rotor2/<arm>`（快照自
 commit 8eb2488）。读数看 `[FL blind] epoch=…` 行（最佳 reward、A、表达式）和
