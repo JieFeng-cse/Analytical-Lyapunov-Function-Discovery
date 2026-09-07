@@ -1,6 +1,9 @@
 # Lean formalization of the rotor2 certificate tail (design)
 
-Date: 2026-09-07. Status: approved in conversation (user decisions D1–D5 below).
+Date: 2026-09-07. Status: **DONE 2026-09-07** — T1 and T2 proved in
+`lean/rotor-fl` (3706 lines, zero sorry, standard axioms only); see C46.
+T2 is stated as `L V + φ(V) ≤ C` on K with `C = exp(10¹⁵)·10¹⁰⁰`.
+Approved design (user decisions D1–D5 below) with the constants of §3.
 
 ## 1. Goal
 

@@ -102,8 +102,9 @@ noncomputable def φ (v : ℝ) : ℝ := cRate * v / (2 + log v)
 def T1_statement : Prop :=
   ∀ r p₁ p₂ : ℝ, ¬ K r p₁ p₂ → L V r p₁ p₂ + φ (V r p₁ p₂) ≤ 0
 
-/-- **T2** (bounded on K): `L V ≤ C` on K, for an explicit `C`. -/
+/-- **T2** (bounded on K): `L V + φ(V) ≤ C` on K, for an explicit `C`; together with
+T1 this is `L V ≤ C·1_K − φ(V)` everywhere. -/
 def T2_statement (C : ℝ) : Prop :=
-  ∀ r p₁ p₂ : ℝ, K r p₁ p₂ → L V r p₁ p₂ ≤ C
+  ∀ r p₁ p₂ : ℝ, K r p₁ p₂ → L V r p₁ p₂ + φ (V r p₁ p₂) ≤ C
 
 end RotorFl
