@@ -799,3 +799,72 @@ Foster–Lyapunov 证书的全局漂移条件，且常数显式。它同时把 C
 钉死：盒内验证的 K（M=9, R=20）不能用，全局需 M=10⁴、R=2×10⁶。
 **下一步**：rotor3/rotor4 同样处理需要 N=3 的多相平均结构（两个噪声端点），
 生成器/链式法则/门引理可直接复用；盒内部分若要也形式化，走区间算术路线。
+
+## C46 (2026-09-07) — 盲搜赛道上线：只给三项骨架，ρ 与 p̃ 全搜；裁判为盒外对数域判据
+
+**决策**（用户拍板，会话 2026-09-07；spec
+`docs/superpowers/specs/2026-09-07-rotor2-blind-skeleton-search-design.md`）：
+- **方案 A**：只知道 V = 1 + e^{θH} + A·ρ·p̃²·e^{θp̃²/2} 的骨架，ρ、p̃ 是
+  (r₁,p₁,p₂) 的自由符号函数，不预设 p̃ 的 1/p₂ 级数结构，也不预设 ρ 的
+  χ(p₂²/S²) 门结构；θ = 0.1 固定；A 不搜，按 {0.1,1,10,100,1000} 网格取最优。
+- **成功标准**只看全局可行性（漂移条件在紧集 K 外成立），不与文档答案比对；
+  K 的上限按参考解校准（C1 做法，1.25 倍）。
+- **词表**：{add, sub, mul, div, sin, cos, exp, n2, step, pair} + 常数 1、2；
+  `step(z)` 是唯一新增原语（z≤0 为 0、z≥1 为 1 的 C^∞ 光滑阶跃），只透露
+  "存在光滑开关"。无 const token（BFGS 内层太贵）。
+- **编码**：单树，根强制为 `pair(ρ, p̃)`（RL 先验 RootConstraint、diffusion
+  语法根规则、GP check_constraint 三处同时执行）。长度上限 60（文档四阶答案
+  约 70 token，本轮至多能到三阶——已知上限）。
+- **引擎**：现有 transformer / diffusion + GP-meld，双臂各 1 seed，
+  预算同 8 月 stage-1（LYA_NSAMPLES=20000，16 h）。模式开关 `LYA_FL_BLIND=1`，
+  与 C8 的 `LYA_FL_TEMPLATE` 互斥，C8 管线原样保留。
+
+**裁判**（`utils/fl_blind.py`，纯 sympy/numpy）：
+1. **对数域求值**，任何候选量都不取指数：logV = logsumexp(0, θH, log A +
+   log ρ + log P + f)，LV/V = w₁Q₁ + (A e^f/V)·G₂，G₂ 由 ρ、p̃ 及其一、二阶导
+   数值拼装（不除以 ρ）。ratio = −(LV/V)(2+logV)，漂移条件 ⇔ ratio ≥ c。
+   与 40 位 mpmath 无缩放求值逐点一致（rtol 1e-6）。
+2. **豁免集必须依赖候选的 ρ**（C36 形状）：K(ρ) = {p₁² ≤ M_max ∧ ρ<1 ∧ 见证}
+   ∪ {p₁² ≤ M₀ ∧ |p₂| ≤ R₂₀}。原因：文档证书在 θ=0.1 下要豁免 |p₁| ≤ 26 的
+   整个过渡带（延伸到 |p₂| ≈ 6.6e5），而 float64 在 |p₂| ≳ 4e4 处已无法分辨
+   好候选的快支漂移（Lp̃ ≈ 1/(2p̃³) 低于消去噪声：2e5 处误差 20%，1e4 处 1e-5）。
+   盒形 K 会逼着 reward 在数值失效区打分。
+3. **见证规则堵漏**：一条 (r₁,p₁) 线上的点要被豁免，ρ 必须在该线的见证壳
+   （|p₁| ≤ 8 用 |p₂| = R2_near，否则 |p₂| = R2_max）上等于 1。ρ ≡ 0 或 ρ ≡ ε
+   的"全豁免"作弊因此无效。近壳 {|p₁| ≤ 8, R2_near ≤ |p₂| ≤ 4e4} 上还要求
+   ρ ≡ 1，使快支在 float64 可信域内被打分——那里需要真门加三阶修正项。
+4. **得分**：v_out = K 外 log1p(max(c_t − ratio,0)/c_t) 的均值（对数压缩；线性
+   均值让早期 reward 全部饱和在 1e-6）；v_comp = 三个壳上 ρ<1 的比例均值；
+   v_in = K 内违反比例；pen = v_out + v_comp + 0.1·v_in，reward = 1/(1+pen)。
+   参考阶梯的 reward：平凡 pair 0.18、只有门 0.15、一阶 0.17、二阶 0.22、
+   **三阶 0.55、四阶 0.98**；ρ≡0 / ρ≡ε 0.18。单调，且作弊解垫底。
+5. **终检**：D 上 2 倍密网格 + 1e7 随机点；远区 |p₂| ∈ [4e4, 4·R2_max] 用
+   mpmath 30 位在粗网格上逐点判（K 外）。全部 ratio ≥ c_t 才算通过。
+6. 每候选 0.03–0.5 s（四阶参考 1.2 s）；符号乘积形式的 G₂ 曾慢 30–100 倍。
+
+**校准**（`repro/blind_calibrate_rotor2.py`，文档 V，R_ρ=20，θ=0.1，A=20）：
+过渡带阈值（30 位）**p₁ = 26**（M_max_ref = 676）；近壳 ρ≡1 起点 8407
+（|p₁| ≤ 8）；远壳 2.33e6（|p₁| ≤ 32.5）；主体速率 c_ref = 1.71e-3（D 上 1.71e-3，
+远区 1.72e-3）；c_t = 0.5·c_ref = **8.56e-4**；核心盒 M₀_ref = 9.24、R₂₀_ref = 211
+（在 c_t 水平上的密扫）。乘 1.25 后：**M_max = 1056，R2_max = 2.91e6，
+R2_near = 1.05e4，M₀ = 14.4，R₂₀ = 264，P1max = 48.75，P2max = 4e4**。参考解
+用这组数通过终检。写入 `example_config/blind_rotor2.json`；参考表达式本身
+不进 JSON 也不进 run dir。
+
+**θ 扫描附记**（同日）：文档证书在 rotor2 上慢区到 θ=0.7 仍成立、0.9 破；
+快区渐近 ratio 在 θ≈0.25–0.3 见顶，θ=0.5 破——机制：p̃ 的噪声系数使 e^{θp̃²/2}
+的二阶项给出 +2θ²cos²r₁/p̃²，需 2θ² < θ/2 即 θ < 1/4。门的形状（R_ρ、χ 宽度）
+对过渡带阈值几乎无影响（64→64/68），θ 从 0.02 提到 0.1/0.2 把阈值从 64 降到
+24/16。这是 C45 的"门要搜"与本条"先固定 θ=0.1"的实验依据。
+
+**已知限制**：float64 可信域之外的快支只在终检里看；长度 60 到不了四阶；
+登录节点 CPU 上 transformer 采样不可用（数据集编码器每步重编码 15000 点），
+冒烟必须上 gpu-debug。测试：`tests/test_fl_blind.py`、`test_blind_priors.py`、
+`test_blind_tokens.py`、`test_rotor_configs.py::test_blind_mode_config`。
+**作业**（2026-09-07 提交）：冒烟 gpu-debug 20471334（transformer）/ 20471335
+（diffusion），LYA_NSAMPLES=1500；正式 16 h 20471455（transformer）/ 20471456
+（diffusion），LYA_NSAMPLES=20000，run dir
+`/anvil/scratch/x-cchen47/LyaDis/runs_rotor_blind/rotor2/<arm>`（快照自
+commit 8eb2488）。读数看 `[FL blind] epoch=…` 行（最佳 reward、A、表达式）和
+`[FL blind final]`。预期是撞墙（C23 先例）；即便失败也要记录：双臂最佳
+(v_out, v_comp, v_in) 轨迹、是否出现过近壳上 ratio 为正的候选、最佳 ρ 的形状。
