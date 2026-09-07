@@ -42,6 +42,22 @@ def gravity(x1):
     return 5 * x1
 
 # Annotate unprotected ops
+def chi_np(z):
+    """Smooth step: 0 for z<=0, 1 for z>=1, C^inf bump splice inside
+    (blind skeleton search, spec 2026-09-07)."""
+    z = np.asarray(z, dtype=np.float64)
+    inner = (z > 0.0) & (z < 1.0)
+    zi = np.where(inner, z, 0.5)
+    with np.errstate(over='ignore', invalid='ignore'):
+        val = 1.0 / (1.0 + np.exp(1.0 / zi - 1.0 / (1.0 - zi)))
+    return np.where(inner, val, np.where(z >= 1.0, 1.0, 0.0))
+
+
+def pair_np(x1, x2):
+    """pair(rho, ptilde) root token: execute() only sees the first child."""
+    return x1
+
+
 unprotected_ops = [
     # Binary operators
     Token(np.add, "add", arity=2, complexity=1),
@@ -78,7 +94,9 @@ unprotected_ops = [
     Token(sigmoid, "sigmoid", arity=1, complexity=4),
     Token(harmonic, "harmonic", arity=1, complexity=4),
     Token(potential, "potential", arity = 1, complexity=2),
-    Token(gravity, "gravity", arity = 1, complexity = 2)
+    Token(gravity, "gravity", arity = 1, complexity = 2),
+    Token(chi_np, "step", arity=1, complexity=3),
+    Token(pair_np, "pair", arity=2, complexity=1),
 ]
 
 
