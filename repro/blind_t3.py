@@ -14,6 +14,10 @@ import sympy as sym
 
 RUNDIR = sys.argv[1] if len(sys.argv) > 1 else "."
 STATE = os.path.join(RUNDIR, "state.json")
+# decay_slope() imports the run-dir config, which only builds the template
+# scaffold (spec["scaffold"]) when LYA_FL_TEMPLATE=1 -- the sbatch script sets
+# it for the search jobs, the driver process must set it for itself.
+os.environ.setdefault("LYA_FL_TEMPLATE", "1")
 FROZEN0 = {"1": "cos(x1)+cos(x2)", "2": "x3*cos(x1)+x5*cos(x2)"}   # stages 1-2 (public)
 SEEDS = [1, 2]
 BUDGET = "1500000"
@@ -134,10 +138,15 @@ def main():
         frozen = s["frozen"]
         cur_len = sum(len(str(v)) for v in frozen.values())
         softloc = max(8, 22 - 4 * rnd)
-        jobs = [submit(frozen, sd, softloc, softloc + 10, f"blind_t3_r{rnd}s{sd}")
-                for sd in SEEDS]
+        # Resume: reuse already-submitted jobs for this round (state["pending"]).
+        jobs = s.get("pending") or [
+            submit(frozen, sd, softloc, softloc + 10, f"blind_t3_r{rnd}s{sd}")
+            for sd in SEEDS]
+        s["pending"] = jobs
+        save_state(s)
         print(f"[round {rnd}] jobs {jobs} frozen={frozen}", flush=True)
         wait(jobs)
+        s["pending"] = None
         results = [best_of(j) for j in jobs]
         exprs = [e for e, _ in results if e]
         rs = [r for _, r in results]
