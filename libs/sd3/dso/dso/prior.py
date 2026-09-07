@@ -27,6 +27,7 @@ def make_prior(library, config_prior):
         "trig" : TrigConstraint,
         "const" : ConstConstraint,
         "no_inputs" : NoInputsConstraint,
+        "root" : RootConstraint,
         "soft_length" : SoftLengthPrior,
         "uniform_arity" : UniformArityPrior,
         # "lyapunov_conditions": LyapunovConditionPrior
@@ -545,6 +546,33 @@ class NoInputsConstraint(Constraint):
     def describe(self):
         message = "{}: Sequences contain at least one input variable Token.".format(self.__class__.__name__)
         return message
+
+
+class RootConstraint(Constraint):
+    """Blind skeleton search (spec 2026-09-07): the first token must be
+    `token` (pair) and it may not appear anywhere else."""
+
+    def __init__(self, library, token="pair"):
+        Prior.__init__(self, library)
+        self.token = int(library.actionize(token)[0])
+
+    def initial_prior(self):
+        prior = np.full((self.L,), -np.inf, dtype=np.float32)
+        prior[self.token] = 0.0
+        return prior
+
+    def __call__(self, actions, parent, sibling, dangling):
+        mask = np.ones(actions.shape[0], dtype=bool)
+        return self.make_constraint(mask, [self.token])
+
+    def is_violated(self, actions, parent, sibling):
+        actions = np.asarray(actions).reshape(-1)
+        return bool(actions.size == 0 or actions[0] != self.token
+                    or np.any(actions[1:] == self.token))
+
+    def describe(self):
+        return "{}: first token is {}, never again.".format(
+            self.__class__.__name__, self.library.names[self.token])
 
 
 class InverseUnaryConstraint(Constraint):
