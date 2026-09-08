@@ -21,7 +21,7 @@ export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_TH
 export LYA_BENCHMARK="$BM"
 export LYA_SEED_START="${LYA_SEED_START:-1}"
 export LYA_SEED_RUNS=1
-export LYA_NSAMPLES="${LYA_NSAMPLES:-20000}"
+export LYA_NSAMPLES="${LYA_NSAMPLES:-800000}"   # nevals counts GP-meld evals (~13.7k/epoch, C18): ~58 epochs
 export LYA_FL_BLIND=1
 
 if [[ "${ARM:-transformer}" == "diffusion" ]]; then
