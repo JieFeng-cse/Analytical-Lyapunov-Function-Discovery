@@ -42,3 +42,36 @@ def test_diffusion_grammar_root_rule():
     rep2 = g.repair([pair, add, pair, x1, x1, x1])
     assert rep2[0] == pair and pair not in rep2[1:] and g.is_complete(rep2)
     assert g.fallback()[0] == pair and g.is_complete(g.fallback())
+
+
+def test_angle_prior_and_grammar_rule():
+    from models.diffusion.grammar import Grammar
+    lib = Library(create_tokens(3, ["add", "mul", "sin", "cos", "step", "pair", "1"], protected=False))
+    n = lib.names
+    x1, x2, add, sin, cos, pair, step = (n.index(t) for t in ["x1", "x2", "add", "sin", "cos", "pair", "step"])
+    prior = make_prior(lib, {"root": {"token": "pair", "on": True},
+                             "relational": {"targets": ["x1"], "effectors": ["add", "mul", "step", "pair"],
+                                            "relationship": "child", "on": True}})
+    # after [pair, add] the next token's parent is add -> x1 masked; after [pair, sin] -> x1 allowed
+    import numpy as np
+    par_add = lib.parent_adjust[add]
+    par_sin = lib.parent_adjust[sin]
+    pr = prior(np.array([[pair, add]]), np.array([par_add]), np.array([lib.L]), np.ones(1))
+    assert np.isneginf(pr[0, x1]) and np.isfinite(pr[0, x2])
+    pr = prior(np.array([[pair, sin]]), np.array([par_sin]), np.array([lib.L]), np.ones(1))
+    assert np.isfinite(pr[0, x1])
+    from dso.gp.utils import jit_parents_siblings_at_once
+
+    def aps(seq):
+        actions = np.array([seq], dtype=np.int32)
+        parent, sibling = jit_parents_siblings_at_once(
+            actions, arities=lib.arities, parent_adjust=lib.parent_adjust)
+        return actions, parent, sibling
+    assert prior.is_violated(*aps([pair, add, x1, x2, x2]))
+    assert not prior.is_violated(*aps([pair, sin, x1, x2]))
+    g = Grammar(lib, root_token=pair, angle_tokens=[x1], angle_parents=[sin, cos])
+    assert not g.valid_token_mask([pair, add])[x1] and g.valid_token_mask([pair, add])[x2]
+    assert g.valid_token_mask([pair, sin])[x1]
+    rep = g.repair([pair, add, x1, x1, x1])
+    assert x1 not in rep and g.is_complete(rep) and rep[0] == pair
+    assert x1 not in g.fallback()

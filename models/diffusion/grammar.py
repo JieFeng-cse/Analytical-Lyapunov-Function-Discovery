@@ -15,10 +15,15 @@ import numpy as np
 
 class Grammar:
     def __init__(self, library, max_const=10, ban_nested_trig=True, max_len=64,
-                 root_token=None):
+                 root_token=None, angle_tokens=None, angle_parents=None):
         self.library = library
         # blind skeleton search: token forced at position 0, forbidden elsewhere
         self.root_token = None if root_token is None else int(root_token)
+        # periodicity: angle input tokens allowed only as the direct child of
+        # one of angle_parents (sin/cos)
+        self.angle_tokens = set(int(t) for t in (angle_tokens or []))
+        self.angle_parents = set(int(t) for t in (angle_parents or []))
+        self.safe_terminal = None
         self.L = int(library.L)
         self.arities = np.asarray(library.arities, dtype=np.int64)
         self.PAD = self.L
@@ -30,6 +35,11 @@ class Grammar:
         self.max_const = max_const
         self.ban_nested_trig = ban_nested_trig
         self.max_len = max_len
+        self.safe_terminal = int(self.terminal_tokens[0])
+        for t in self.terminal_tokens:
+            if int(t) not in self.angle_tokens:
+                self.safe_terminal = int(t)
+                break
 
     # --- arity-aware completion (the "open slots" / dangling counter) -----------
     def arity(self, tok):
@@ -109,21 +119,25 @@ class Grammar:
         if self.root_token is not None and len(self._real(tokens)) == 0:
             mask[self.root_token] = True     # position 0: only the root token
             return mask
+        anc = self.open_ancestors(tokens) if self.angle_tokens else None
+        angle_ok = bool(anc) and anc[-1] in self.angle_parents
         for tid in range(self.L):
             if self.const_token is not None and tid == self.const_token and const_count >= self.max_const:
                 continue
             if self.root_token is not None and tid == self.root_token:
                 continue
+            if tid in self.angle_tokens and not angle_ok:
+                continue
             if self._would_nest_trig(tokens, tid):
                 continue
             mask[tid] = True                 # PAD stays False before completion
         if not mask.any():                    # never strand the sampler
-            mask[int(self.terminal_tokens[0])] = True
+            mask[self.safe_terminal] = True
         return mask
 
     # --- repair + fallback (design doc §7) --------------------------------------
     def fallback(self):
-        t = int(self.terminal_tokens[0])
+        t = self.safe_terminal
         if self.root_token is None:
             return [t]
         return [self.root_token] + [t] * self.arity(self.root_token)
@@ -140,12 +154,12 @@ class Grammar:
             if self.dangling(out) <= 0:
                 break
             if not self.valid_token_mask(out)[tok]:   # invalid given context -> terminal
-                tok = int(self.terminal_tokens[0])
+                tok = self.safe_terminal
             out.append(int(tok))
             if self.is_complete(out):
                 return out
         while self.dangling(out) > 0 and len(out) < self.max_len:
-            out.append(int(self.terminal_tokens[0]))
+            out.append(self.safe_terminal)
         return out if self.is_complete(out) else self.fallback()
 
     def pad_after_complete(self, tokens, length):

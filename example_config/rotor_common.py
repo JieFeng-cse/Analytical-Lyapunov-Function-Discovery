@@ -55,6 +55,13 @@ def apply_blind_overrides(cfg):
         return cfg
     cfg["task"]["function_set"] = list(BLIND_FUNCTION_SET)
     cfg["prior"]["root"] = {"token": "pair", "on": True}
+    # Periodicity in the bond angle: x1 (= r1) may only be the direct child of
+    # sin/cos. Without this the sampler finds terms linear in r1, whose drift
+    # dr1/dt = p2 - p1 fakes a negative drift (smoke job 20471334, epoch 0).
+    cfg["prior"]["relational"] = {"targets": ["x1"],
+                                  "effectors": [t for t in BLIND_FUNCTION_SET
+                                                if t not in ("sin", "cos", "1", "2")],
+                                  "relationship": "child", "on": True}
     cfg["prior"]["length"] = {"min_": 5, "max_": 60, "on": True}
     cfg["prior"]["soft_length"] = {"loc": 28, "scale": 8, "on": True}
     cfg["prior"]["const"] = {"on": False}

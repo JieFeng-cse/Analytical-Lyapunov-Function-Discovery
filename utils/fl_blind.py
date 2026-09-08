@@ -234,6 +234,29 @@ class BlindJudge:
         except Exception:
             return None
 
+    def is_periodic(self, fn, n=96, tol=1e-8):
+        """rho and ptilde must be 2*pi-periodic in the bond angle (periodicity
+        in q is part of the problem statement; a term linear in r1 fakes
+        negative drift through dr1/dt = p2 - p1)."""
+        rng = np.random.default_rng(12345)
+        X = np.column_stack([rng.uniform(-np.pi, np.pi, n), rng.uniform(-8, 8, n),
+                             rng.uniform(-50, 50, n)])
+        Xs = X.copy()
+        Xs[:, 0] += 2 * np.pi
+        try:
+            a = self._eval(fn, X)
+            b = self._eval(fn, Xs)
+        except Exception:
+            return False
+        k = 1 + len(self.sv) + len(self.noise)
+        for i in (0, k):                      # rho, ptilde
+            with np.errstate(all="ignore"):
+                d = np.abs(a[i] - b[i])
+                ok = np.isfinite(a[i]) & np.isfinite(b[i])
+                if np.any(d[ok] > tol * (1.0 + np.abs(a[i][ok]))):
+                    return False
+        return True
+
     def _static(self, X):
         """Grid-only fields (theta H, Q1, drift_i), cached per grid object."""
         key = (id(X), X.shape)
@@ -286,6 +309,8 @@ class BlindJudge:
         rho < 0 or non-finite anywhere, non-finite pieces where rho > 0."""
         fn = self.compile(expr) if fns is None else fns
         if fn is None:
+            return None
+        if not self.is_periodic(fn):
             return None
         try:
             prim = self._eval(fn, self.grid)

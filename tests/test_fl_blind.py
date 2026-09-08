@@ -101,3 +101,13 @@ def test_calibration_json_loads():
         assert k in d
     assert d["theta"] == 0.1 and d["M_max"] > d["M_max_ref"] and d["c_t"] < d["c_ref"]
     assert d["R2_near"] < d["P2max"] < d["R2_max"]
+
+
+def test_periodicity_backstop():
+    judge, sv = _judge()
+    x1, x2, x3 = sv
+    pair = sym.Function("pair")
+    step = sym.Function("step")
+    assert judge.penalty(pair(step(x3**4), x3 + x1))[2] is False           # linear in r1
+    assert judge.penalty(pair(step(x3**4 + x1), x3))[2] is False           # r1 inside the gate
+    assert judge.penalty(pair(step(x3**4), x3 + sym.cos(x1)))[2] is True   # periodic
