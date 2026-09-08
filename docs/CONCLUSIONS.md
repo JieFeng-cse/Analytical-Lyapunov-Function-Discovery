@@ -868,3 +868,27 @@ R2_near = 1.05e4，M₀ = 14.4，R₂₀ = 264，P1max = 48.75，P2max = 4e4**�
 commit 8eb2488）。读数看 `[FL blind] epoch=…` 行（最佳 reward、A、表达式）和
 `[FL blind final]`。预期是撞墙（C23 先例）；即便失败也要记录：双臂最佳
 (v_out, v_comp, v_in) 轨迹、是否出现过近壳上 ratio 为正的候选、最佳 ρ 的形状。
+
+## C47 (2026-09-08) — 盲搜首个冒烟 epoch 抓到周期性漏洞；预算按 C18 修正后重提
+
+**读数**（冒烟 20471334，transformer，GPU 上 1 个 epoch 约 4 min）：epoch 0
+最佳 reward 0.986，候选 `pair(step(p₂⁴), 1.05p₂ + 0.37p₁ − 0.37r₁ + …)`。
+它不是解：p̃ 里含 **r₁ 的线性项**，dr₁/dt = p₂ − p₁ 让 p̃·Lp̃ ≈ −0.39p₂² 处处为负，
+"漂移"是键角当成无界坐标伪造出来的，V 不满足题目要求的周期性。首轮
+设计（2026-07-28）本就把周期性列为"事后检查、不进环"，C8 的槽位搜索因
+词表关系没暴露过；盲搜第一步就撞上。
+
+**修正**（commit 8ade97b）三层同时执行：
+1. transformer 臂：`relational` 先验，x1（r₁）只能是 sin/cos 的直接子节点；
+2. diffusion 臂：语法里同样的角度规则（含 repair/fallback 改用非角度终端）；
+3. 裁判后备：ρ、p̃ 对 r₁ 的 2π 周期性数值检查（96 个随机点，rtol 1e-8），
+   不周期即判无效——覆盖 GP 交叉变异产出的个体。
+测试：`test_blind_priors.py::test_angle_prior_and_grammar_rule`、
+`test_fl_blind.py::test_periodicity_backstop`。
+
+**预算**：冒烟只跑了 1 个 epoch 就结束——C18 记过的同一坑：nevals 把 GP-meld
+的评估（每 epoch ≈13.7k）计入 n_samples。正式作业改 LYA_NSAMPLES=800000
+（≈58 epoch，每 epoch ≈3.5–4 min，落在 6 h 墙内；commit d922347）。
+
+**重提**：冒烟 20502815（transformer）/ 20502816（diffusion）；正式 20502817
+（transformer）/ 20502818（diffusion），6 h。旧作业 20473110/11、20471335 已取消。
