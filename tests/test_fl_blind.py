@@ -111,3 +111,21 @@ def test_periodicity_backstop():
     assert judge.penalty(pair(step(x3**4), x3 + x1))[2] is False           # linear in r1
     assert judge.penalty(pair(step(x3**4 + x1), x3))[2] is False           # r1 inside the gate
     assert judge.penalty(pair(step(x3**4), x3 + sym.cos(x1)))[2] is True   # periodic
+
+
+def test_oscillating_gate_is_not_exempt():
+    judge, sv = _judge()
+    x1, x2, x3 = sv
+    pair = sym.Function("pair")
+    step = sym.Function("step")
+    # the exploit found by job 20502818 epoch 1: checkerboard gate, bounded ptilde
+    pen, A, ok = judge.penalty(pair(step(sym.cos(2 * x3**2))**2, sym.cos(x3 + 2) + 2))
+    assert ok
+    fl = judge.fields(pair(step(sym.cos(2 * x3**2))**2, sym.cos(x3 + 2) + 2))
+    assert fl["band"].mean() < 0.05          # essentially nothing exempted
+    assert pen > 2.0                          # far below the order-3 reference (~0.8)
+    # the document's gate keeps its transition band exempt
+    fl_ref = judge.fields(reference_pair(order=4))
+    assert fl_ref["band"].sum() > 0
+    s4 = judge.score(fl_ref, 10.0)
+    assert s4[1][0] == 0.0 and s4[1][1] == 0.0

@@ -130,8 +130,10 @@ def reference_pair(order=4, R_rho=20):
 
     K(rho) = {p1^2 <= M_max and rho < 1 and WITNESS}  U  {p1^2 <= M_0 and |p2| <= R2_0}
 
-WITNESS(x): on the same (r1, p1) line the gate reaches 1 at the witness shell
-    |p2| = R2_near  (if p1^2 <= M_near)   else   |p2| = R2_max,
+WITNESS(x): on the same (r1, p1, sign p2) line the gate reaches 1 at the witness
+    shell |p2| = R2_near (if p1^2 <= M_near) else |p2| = R2_max, AND x lies in the
+    LAST rho<1 band below that contiguous rho == 1 tail (walking down from the
+    witness: ones ... ones | band (exempt) | anything below: not exempt),
 so a vanishing or infinitesimal gate exempts nothing. The drift condition is
 scored on the float64-trusted domain D = {|p1| <= P1max, |p2| <= P2max}
 outside K(rho). Compactness of K is enforced by requiring rho == 1 on the near
@@ -174,10 +176,13 @@ class BlindJudge:
         self._thH = self._lam(th * H)
         self._Q1 = self._lam(Q1)
         n = (13, 12, 20) if b.get("grid_coarse", False) else tuple(b.get("grid_n", (17, 16, 32)))
-        self.set_grid(make_grid(self.P1max, self.P2max, *n))
+        self.set_grid(make_grid(self.P1max, self.P2max, *n), shape=(n[0], 2 * n[1] + 1, 2 * n[2] + 1))
 
-    def set_grid(self, X):
+    def set_grid(self, X, shape=None):
+        """shape=(n_r, n_p1, n_p2) marks a make_grid() product grid (exact band
+        scan along p2); otherwise the ladder scan is used for the exemption."""
         self.grid = np.asarray(X, dtype=np.float64)
+        self.grid_shape = tuple(shape) if shape is not None else None
         p1, p2 = self.grid[:, 1], self.grid[:, 2]
         self.box0 = (p1**2 <= self.M_0) & (np.abs(p2) <= self.R2_0)
         self.in_Mmax = p1**2 <= self.M_max
@@ -324,6 +329,10 @@ class BlindJudge:
             if np.any(~np.isfinite(arr)) or np.any(arr < 0):
                 return None
         witness = np.where(self.in_Mnear, rho_wn >= RHO_ONE, rho_wf >= RHO_ONE)
+        try:
+            band = self._band_exempt(fn, rho_v, witness)
+        except Exception:
+            return None
         active = rho_v > 0
         for arr in (P_v, f_v, G2_v):
             if np.any(~np.isfinite(arr[active])):
@@ -331,7 +340,7 @@ class BlindJudge:
         with np.errstate(all="ignore"):
             log_rhoP = np.where(active & (P_v > 0), np.log(rho_v) + np.log(P_v), -np.inf)
         return {"thH": thH, "Q1": Q1, "log_rhoP": log_rhoP, "rho": rho_v,
-                "rho_wn": rho_wn, "rho_wf": rho_wf, "witness": witness,
+                "rho_wn": rho_wn, "rho_wf": rho_wf, "witness": witness, "band": band,
                 "f": np.where(active, f_v, 0.0), "G2": np.where(active, G2_v, 0.0)}
 
     def _weights(self, fl, A):
@@ -362,7 +371,69 @@ class BlindJudge:
         return -LV_over_V * (2.0 + lv)
 
     def exempt(self, fl):
-        return (self.in_Mmax & (fl["rho"] < RHO_ONE) & fl["witness"]) | self.box0
+        return (self.in_Mmax & fl["band"]) | self.box0
+
+    @staticmethod
+    def _scan_down(ones_top_to_x, witness):
+        """State machine along one line, walking DOWN from the witness through
+        rungs ordered from largest |p2| to the point itself (last column).
+        ones_top_to_x: (n_lines, m) bool, rho >= 1 at each rung; the point is
+        the last column. Returns exempt flag of the point: it is exempt iff it
+        is in the last rho<1 band under a contiguous rho==1 tail that reaches
+        the witness."""
+        n, m = ones_top_to_x.shape
+        state = np.where(witness, 0, 2)          # 0 tail, 1 band, 2 dead
+        for j in range(m - 1):
+            o = ones_top_to_x[:, j]
+            state = np.where((state == 0) & ~o, 1, state)
+            state = np.where((state == 1) & o, 2, state)
+        x_one = ones_top_to_x[:, -1]
+        return (~x_one) & (state <= 1)
+
+    def _band_exempt(self, fn, rho_v, witness):
+        p1, p2 = self.grid[:, 1], self.grid[:, 2]
+        ones = rho_v >= RHO_ONE
+        if self.grid_shape is not None:
+            n_r, n_p1, n_p2 = self.grid_shape
+            mid = n_p2 // 2
+            O = ones.reshape(n_r, n_p1, n_p2)
+            W = witness.reshape(n_r, n_p1, n_p2)
+            out = np.zeros_like(O)
+            # positive side: rungs from the top (index n_p2-1) down to k
+            pos = O[:, :, mid + 1:]                                   # ascending |p2|
+            wpos = W[:, :, -1].reshape(-1)
+            n_lines = n_r * n_p1
+            state = np.where(wpos, 0, 2)
+            res = np.zeros((n_lines, pos.shape[2]), dtype=bool)
+            for k in range(pos.shape[2] - 1, -1, -1):
+                o = pos[:, :, k].reshape(-1)
+                res[:, k] = (~o) & (state <= 1)
+                state = np.where((state == 0) & ~o, 1, state)
+                state = np.where((state == 1) & o, 2, state)
+            out[:, :, mid + 1:] = res.reshape(n_r, n_p1, -1)
+            neg = O[:, :, :mid]                                       # index 0 = largest |p2|
+            wneg = W[:, :, 0].reshape(-1)
+            state = np.where(wneg, 0, 2)
+            res = np.zeros((n_lines, neg.shape[2]), dtype=bool)
+            for k in range(neg.shape[2]):
+                o = neg[:, :, k].reshape(-1)
+                res[:, k] = (~o) & (state <= 1)
+                state = np.where((state == 0) & ~o, 1, state)
+                state = np.where((state == 1) & o, 2, state)
+            out[:, :, :mid] = res.reshape(n_r, n_p1, -1)
+            return out.reshape(-1)
+        # arbitrary points: 16-rung geometric ladder from the witness shell down to |p2|
+        top = np.where(self.in_Mnear, self.R2_near, self.R2_max)
+        a2 = np.maximum(np.abs(p2), 0.25)
+        beyond = np.abs(p2) >= top
+        m = 16
+        t = np.linspace(1.0, 0.0, m + 1)[:-1]                        # 1 -> just above 0
+        rungs = a2[:, None] * (top / a2)[:, None] ** t[None, :]        # descending from top to just above |p2|
+        sgn = np.where(p2 < 0, -1.0, 1.0)
+        R = np.column_stack([np.repeat(self.grid[:, 0], m), np.repeat(p1, m), (sgn[:, None] * rungs).reshape(-1)])
+        rr = self._eval(fn, R)[0].reshape(-1, m) >= RHO_ONE
+        seq = np.concatenate([rr, ones[:, None]], axis=1)
+        return self._scan_down(seq, witness) & ~beyond
 
     def score(self, fl, A):
         """(pen, parts) or None if the ratio is non-finite somewhere.
@@ -505,9 +576,9 @@ def fl_blind_final_check(expr, spec, state_vars, drift, A, seed=0):
         return False, None
     worst, worst_r = None, np.inf
 
-    def scan(X, ratio_fn):
+    def scan(X, ratio_fn, shape=None):
         nonlocal worst, worst_r
-        j.set_grid(X)
+        j.set_grid(X, shape=shape)
         fl = j.fields(expr, fns=fns)
         if fl is None:
             return False
@@ -523,13 +594,18 @@ def fl_blind_final_check(expr, spec, state_vars, drift, A, seed=0):
                 worst_r, worst = r[i], j.grid[i].copy()
         return True
 
-    parts = [make_grid(j.P1max, j.P2max, 49, 48, 80)] if b.get("dense", True) else [j.grid]
+    parts = [(make_grid(j.P1max, j.P2max, 49, 48, 80), (49, 97, 161))] if b.get("dense", True) \
+        else [(j.grid, j.grid_shape)]
     n_random = int(b.get("n_random", 10_000_000))
     if n_random > 0:
         rng = np.random.default_rng(seed)
-        parts.append(rng.uniform([-np.pi, -j.P1max, -j.P2max], [np.pi, j.P1max, j.P2max],
-                                 size=(n_random, 3)))
-    for X in parts:
+        parts.append((rng.uniform([-np.pi, -j.P1max, -j.P2max], [np.pi, j.P1max, j.P2max],
+                                  size=(n_random, 3)), None))
+    for X, shp in parts:
+        if shp is not None:
+            if not scan(X, lambda fl: j.ratio(fl, A), shp):
+                return False, None
+            continue
         for lo in range(0, X.shape[0], 1_000_000):
             if not scan(X[lo:lo + 1_000_000], lambda fl: j.ratio(fl, A)):
                 return False, None
@@ -544,7 +620,7 @@ def fl_blind_final_check(expr, spec, state_vars, drift, A, seed=0):
     rho_far = j._eval(fns, far)[0]
     wit = np.where(j.in_Mnear, j._eval(fns, j.wit_near)[0] >= RHO_ONE,
                    j._eval(fns, j.wit_far)[0] >= RHO_ONE)
-    ex = (j.in_Mmax & (rho_far < RHO_ONE) & wit) | j.box0
+    ex = (j.in_Mmax & j._band_exempt(fns, rho_far, wit)) | j.box0
     pts = far[~ex]
     if len(pts):
         rf = ratio_mp_points(j, expr, pts, A, dps=int(b.get("dps", 30)))

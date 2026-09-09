@@ -103,7 +103,7 @@ far = np.stack([R.ravel(), P1.ravel(), P2.ravel()], 1)
 j.set_grid(far)
 rho_far = j._eval(fns, far)[0]
 wit = np.where(j.in_Mnear, j._eval(fns, j.wit_near)[0] >= RHO_ONE, j._eval(fns, j.wit_far)[0] >= RHO_ONE)
-ex = (far[:, 1]**2 <= M_max) & (rho_far < RHO_ONE) & wit
+ex = (far[:, 1]**2 <= M_max) & j._band_exempt(fns, rho_far, wit)
 rf = ratio_mp_points(j, expr, far[~ex], A_REF, dps=30)
 c_bulk_far = float(np.nanmin(rf))
 print(f"(e) far region outside band-K (mpmath): n={int((~ex).sum())} min ratio={c_bulk_far:+.4e}   [{time.time()-t0:.0f}s]", flush=True)
