@@ -437,9 +437,10 @@ class BlindJudge:
 
     def score(self, fl, A):
         """(pen, parts) or None if the ratio is non-finite somewhere.
-        v_out: log-compressed drift violation outside K (mean of
-               log1p(max(c_t - ratio, 0)/c_t)), so rewards keep a gradient from
-               ratio ~ -1e6 up to feasibility instead of saturating at 0;
+        v_out: 2*(fraction violating outside K) + mean log1p(max(c_t - ratio, 0)/c_t)
+               over the scored points: the fraction caps violate-everywhere
+               candidates, the log term keeps a gradient from ratio ~ -1e6 up
+               to feasibility instead of saturating at 0;
         v_comp: fraction of shell/witness points with rho < 1;
         v_in: fraction of exempt points violating (secondary: smaller K wins)."""
         r = self.ratio(fl, A)
@@ -447,7 +448,12 @@ class BlindJudge:
             return None
         ex = self.exempt(fl)
         rc = np.clip(r, -1e6, np.inf)
-        v_out = float(np.mean(np.log1p(np.maximum(self.c_t - rc[~ex], 0.0) / self.c_t)))
+        viol = np.maximum(self.c_t - rc[~ex], 0.0) / self.c_t
+        # 2 x (fraction of scored points violating) + mean log-magnitude: a
+        # candidate violating everywhere is capped at reward 1/3 however mild
+        # the violations (job 20539551 epoch 0: V ~ huge constant makes
+        # ratio ~ 0 < c_t everywhere, and the log term alone priced that at 0.57).
+        v_out = 2.0 * float(np.mean(viol > 0)) + float(np.mean(np.log1p(viol)))
         v_in = float(np.mean(r[ex] < self.c_t)) if ex.any() else 0.0
         v_comp = (float(np.mean(fl["rho"][self.near_shell] < RHO_ONE))
                   + float(np.mean(fl["rho_wn"][self.in_Mnear] < RHO_ONE))

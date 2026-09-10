@@ -123,9 +123,26 @@ def test_oscillating_gate_is_not_exempt():
     assert ok
     fl = judge.fields(pair(step(sym.cos(2 * x3**2))**2, sym.cos(x3 + 2) + 2))
     assert fl["band"].mean() < 0.05          # essentially nothing exempted
-    assert pen > 2.0                          # far below the order-3 reference (~0.8)
+    assert pen > 2.0                          # far below the order-3 reference (~1.3)
     # the document's gate keeps its transition band exempt
     fl_ref = judge.fields(reference_pair(order=4))
     assert fl_ref["band"].sum() > 0
     s4 = judge.score(fl_ref, 10.0)
     assert s4[1][0] == 0.0 and s4[1][1] == 0.0
+
+
+def test_flat_V_is_capped():
+    """V ~ huge constant (rho == 1, ptilde ~ 65537): ratio ~ 0 everywhere, a mild
+    violation at every scored point. Must stay below the order-3 reference."""
+    judge, sv = _judge()
+    x1, x2, x3 = sv
+    pair = sym.Function("pair")
+    step = sym.Function("step")
+    flat = pair(sym.Integer(1) + 0 * x3,
+                (0.5 * step(16.0 - x2**8 / (25.0 * (0.2 * x3 - 1)**2 + 2.0)) + 65537.0)
+                / (1.0 - step(step(0.45 - 27.3 * x2**2))))
+    pen_flat, _, ok = judge.penalty(flat)
+    pen3, _, ok3 = judge.penalty(reference_pair(order=3))
+    assert ok and ok3
+    assert pen_flat > 2.0 and 1.0 / (1.0 + pen_flat) < 0.34
+    assert pen3 < pen_flat
