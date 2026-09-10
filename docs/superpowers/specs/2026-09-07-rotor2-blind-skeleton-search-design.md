@@ -114,7 +114,7 @@ float64 cannot resolve the fast-branch drift of a *good* candidate beyond
 ### 3.3 Score
 
 ```
-v_out  = mean over D \ K(ρ) of log1p( max(c_t − ratio, 0) / c_t )   (ratio clipped at −1e6)
+v_out  = 2·frac(ratio < c_t on D \ K(ρ)) + mean over D \ K(ρ) of log1p( max(c_t − ratio, 0) / c_t )   (ratio clipped at −1e6; C49)
 v_comp = ( frac(ρ<1 on near shell) + frac(ρ<1 on near witnesses, p₁²≤M_near)
          + frac(ρ<1 on far witnesses, p₁²≤M_max) ) / 3
 v_in   = frac(ratio < c_t on K(ρ))
@@ -123,8 +123,10 @@ pen    = v_out + v_comp + 0.1·v_in ;   reward = 1 / (1 + pen)
 
 The log compression keeps a gradient from ratio ≈ −10⁶ up to feasibility
 (a linear mean saturated every early reward at ≈ 10⁻⁶). Measured landscape on
-the reference ladder: trivial pair 0.18, gate only 0.15, order 1 0.17, order 2
-0.22, order 3 0.55, order 4 0.98; ρ ≡ 0 and ρ ≡ ε score 0.18.
+the reference ladder (C49 score): trivial pair 0.17, order 1 0.16, order 2
+0.19, order 3 0.42, order 4 0.98; degenerates: ρ ≡ 0 0.18, checkerboard gate 0.19,
+flat V 0.27 (any violate-everywhere candidate is capped at 1/3). Exemption is the
+last ρ<1 band under a contiguous ρ = 1 tail (C48).
 
 A is not searched: the A-independent fields are evaluated once and combined
 for A ∈ {0.1, 1, 10, 100, 1000}; the reward is the best of the five, the
