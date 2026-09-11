@@ -935,3 +935,29 @@ diffusion epoch 0 为 0.402（ρ≡1，p̃ = p₂·g(p₁)，部分真实结构�
 **重提**：取消 20539551/52；正式 **20557834（transformer）/ 20557835（diffusion）**。
 三轮下来裁判被搜索器依次攻破的洞：非周期 r₁（C47）、棋盘门骗豁免（C48）、
 平坦 V 的温和违反（C49）。每一个都是"候选相关的量进了得分"留下的缝。
+
+## C50 (2026-09-11) — 第四轮：GP 育出的嵌套怪物把裁判卡死数小时；加嵌套禁令与复杂度上限
+
+**读数**（正式 20557834/35，C49 得分）：transformer epoch 0 最佳 0.209（有界 p̃，
+按新得分正确压到底），**6 h 只完成 1 个 epoch**；diffusion epoch 0 0.395、之后
+epoch 用时 259 s → 206 s → 1578 s，随后卡死。用 `srun --overlap` 进节点 py-spy：
+主进程等在 GP-meld 的 pool.map 上，三个 worker 各 92% CPU 卡在 sympy 的
+代码打印器里——GP 交叉变异育出 step(step(step(…)))、exp(exp(…)) 之类的候选，
+其二阶导表达式呈指数级膨胀，lambdify 一个候选要数小时，而 map 要等所有
+worker 完成。RL 采样阶段不会产生这种候选（soft_length 与先验压着），是
+GP-meld 的产物。
+
+**修正**（commit 3d3f050，三层）：
+1. 先验 `NoNestConstraint`（新，key `nonest`）：step 不能出现在 step 之内、exp 不能
+   出现在 exp 之内；采样端用 ancestors 掩码，GP 端用纯 Python 前序遍历判定
+   （DSO 自带的 jit descendant 检查在这个用例上漏判，故未用）。diffusion 语法
+   加同样的 ban_nested 规则。
+2. 裁判复杂度上限：count_ops(ρ)+count_ops(p̃) ≤ 200，一元函数嵌套深度 ≤ 3，
+   十个原始导数场的 count_ops 总和 ≤ 6000，超出即判无效。
+3. 编译阶段 SIGALRM 3 s 硬上限（在 pool worker 主线程内同样有效），超时判无效。
+测试 `test_fl_blind.py::test_complexity_caps_reject_nested_monsters`、
+`test_blind_priors.py::test_nesting_ban_prior_and_grammar`。
+
+**重提**：正式 **20576344（transformer）/ 20576345（diffusion）**，6 h。
+四轮的洞：非周期 r₁（C47）、棋盘门（C48）、平坦 V（C49）、嵌套膨胀（C50）。
+前三个是得分被候选相关量攻破，第四个是计算成本被候选形状攻破。
