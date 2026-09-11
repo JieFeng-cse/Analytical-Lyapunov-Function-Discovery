@@ -17,10 +17,58 @@ quantity is ever formed and nothing divides by rho:
 
 The drift condition  LV <= -c V / (2 + log V)  holds at x  iff  ratio(x) >= c.
 """
+import contextlib
+import signal
+
 import numpy as np
 import sympy as sym
 
 from utils.fl_reward import generator_expr
+
+# Complexity caps (job 20557834/5: GP-bred step(step(step(...)))/exp(exp(...))
+# candidates made sympy's derivative code generation take hours per candidate
+# and blocked the GP-meld pool). Checked before and after differentiation, and
+# a SIGALRM backstop around the whole compile.
+MAX_OPS_CANDIDATE = 200      # count_ops(rho) + count_ops(ptilde)
+MAX_OPS_PRIMS = 6000         # sum of count_ops over the 10 primitive fields
+MAX_NEST = 3                 # max depth of nested unary Functions (step/exp/sin/cos)
+COMPILE_SECONDS = 3
+
+
+class _Timeout(Exception):
+    pass
+
+
+@contextlib.contextmanager
+def _time_limit(seconds):
+    """SIGALRM-based cap; only effective in the main thread of a process
+    (true for the RL reward loop and for every GP-meld pool worker)."""
+    def handler(signum, frame):
+        raise _Timeout()
+    try:
+        old = signal.signal(signal.SIGALRM, handler)
+    except ValueError:            # not in main thread
+        yield
+        return
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
+def _max_nesting(expr):
+    """Depth of nested Function applications (sin(exp(step(x))) -> 3)."""
+    best = 0
+    stack = [(expr, 0)]
+    while stack:
+        e, d = stack.pop()
+        if isinstance(e, sym.Function):
+            d += 1
+            best = max(best, d)
+        stack.extend((a, d) for a in e.args)
+    return best
 
 
 # ---- smooth step as a sympy Function with symbolic derivatives ------------------
@@ -230,13 +278,20 @@ class BlindJudge:
         if self.sv[2] not in pt.free_symbols:
             return None
         try:
-            prims = []
-            for e in (rho, pt):
-                prims.append(e)
-                prims.extend(sym.diff(e, s) for s in self.sv)
-                prims.extend(sym.diff(e, self.sv[b], 2) for b in self.noise)
-            return sym.lambdify(self.sv, prims, modules=[CHI_MODULES, "numpy"])
-        except Exception:
+            with _time_limit(COMPILE_SECONDS):
+                if sym.count_ops(rho) + sym.count_ops(pt) > MAX_OPS_CANDIDATE:
+                    return None
+                if max(_max_nesting(rho), _max_nesting(pt)) > MAX_NEST:
+                    return None
+                prims = []
+                for e in (rho, pt):
+                    prims.append(e)
+                    prims.extend(sym.diff(e, s) for s in self.sv)
+                    prims.extend(sym.diff(e, self.sv[b], 2) for b in self.noise)
+                if sum(sym.count_ops(e) for e in prims) > MAX_OPS_PRIMS:
+                    return None
+                return sym.lambdify(self.sv, prims, modules=[CHI_MODULES, "numpy"])
+        except (_Timeout, Exception):
             return None
 
     def is_periodic(self, fn, n=96, tol=1e-8):

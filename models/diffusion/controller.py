@@ -57,18 +57,21 @@ class DiffusionController(nn.Module):
                 self.max_length = int(p.max)
                 break
 
-        root_token, angle_tokens, angle_parents = None, None, None
+        root_token, angle_tokens, angle_parents, ban_nested = None, None, None, []
         for p in prior.priors:
             if p.__class__.__name__ == "RootConstraint":
                 root_token = int(p.token)
-            if (p.__class__.__name__ == "RelationalConstraint"
-                    and getattr(p, "relationship", None) == "child"
-                    and np.all(np.isin(p.targets, library.input_tokens))):
-                angle_tokens = [int(t) for t in p.targets]
-                angle_parents = [int(t) for t in library.unary_tokens if int(t) not in set(int(e) for e in p.effectors)]
+            if p.__class__.__name__ == "RelationalConstraint":
+                rel = getattr(p, "relationship", None)
+                if rel == "child" and np.all(np.isin(p.targets, library.input_tokens)):
+                    angle_tokens = [int(t) for t in p.targets]
+                    angle_parents = [int(t) for t in library.unary_tokens
+                                     if int(t) not in set(int(e) for e in p.effectors)]
+            if p.__class__.__name__ == "NoNestConstraint":
+                ban_nested.extend(int(t) for t in p.tokens)
         self.grammar = Grammar(library, max_const=max_const, max_len=self.max_length,
                                root_token=root_token, angle_tokens=angle_tokens,
-                               angle_parents=angle_parents)
+                               angle_parents=angle_parents, ban_nested=ban_nested)
         assert vocab_size is not None, "vocab_size (dynamics prefix vocab) is required"
         self.denoiser = MaskedDiffusionDenoiser(
             self.n_choices, self.max_length, dyn_vocab_size=vocab_size,

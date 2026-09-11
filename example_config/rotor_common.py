@@ -62,6 +62,9 @@ def apply_blind_overrides(cfg):
                                   "effectors": [t for t in BLIND_FUNCTION_SET
                                                 if t not in ("sin", "cos", "1", "2")],
                                   "relationship": "child", "on": True}
+    # no step inside step, no exp inside exp: nested compositions blew up the
+    # derivative code generation (hours per candidate, C50)
+    cfg["prior"]["nonest"] = {"tokens": ["step", "exp"], "on": True}
     cfg["prior"]["length"] = {"min_": 5, "max_": 60, "on": True}
     cfg["prior"]["soft_length"] = {"loc": 28, "scale": 8, "on": True}
     cfg["prior"]["const"] = {"on": False}

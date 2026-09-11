@@ -75,3 +75,29 @@ def test_angle_prior_and_grammar_rule():
     rep = g.repair([pair, add, x1, x1, x1])
     assert x1 not in rep and g.is_complete(rep) and rep[0] == pair
     assert x1 not in g.fallback()
+
+
+def test_nesting_ban_prior_and_grammar():
+    from models.diffusion.grammar import Grammar
+    lib = Library(create_tokens(3, ["add", "mul", "sin", "cos", "exp", "step", "pair", "1"], protected=False))
+    n = lib.names
+    x2, add, step, exp, pair, cos = (n.index(t) for t in ["x2", "add", "step", "exp", "pair", "cos"])
+    prior = make_prior(lib, {"root": {"token": "pair", "on": True},
+                             "nonest": {"tokens": ["step", "exp"], "on": True}})
+    pr = prior(np.array([[pair, step]]), np.zeros(1), np.zeros(1), np.ones(1))
+    assert np.isneginf(pr[0, step]) and np.isfinite(pr[0, exp])
+    from dso.gp.utils import jit_parents_siblings_at_once
+
+    def aps(seq):
+        actions = np.array([seq], dtype=np.int32)
+        parent, sibling = jit_parents_siblings_at_once(actions, arities=lib.arities, parent_adjust=lib.parent_adjust)
+        return actions, parent, sibling
+    assert prior.is_violated(*aps([pair, step, step, x2, x2]))
+    assert prior.is_violated(*aps([pair, exp, add, x2, exp, x2, x2]))
+    assert not prior.is_violated(*aps([pair, step, exp, x2, exp, step, x2]))
+    g = Grammar(lib, root_token=pair, ban_nested=[step, exp])
+    assert not g.valid_token_mask([pair, step])[step] and g.valid_token_mask([pair, step])[exp]
+    assert not g.valid_token_mask([pair, exp, add, x2])[exp]
+    assert g.valid_token_mask([pair, step, x2])[step]      # step closed -> allowed again
+    rep = g.repair([pair, step, step, x2, x2])
+    assert g.is_complete(rep) and rep.count(step) <= 1

@@ -15,7 +15,8 @@ import numpy as np
 
 class Grammar:
     def __init__(self, library, max_const=10, ban_nested_trig=True, max_len=64,
-                 root_token=None, angle_tokens=None, angle_parents=None):
+                 root_token=None, angle_tokens=None, angle_parents=None,
+                 ban_nested=None):
         self.library = library
         # blind skeleton search: token forced at position 0, forbidden elsewhere
         self.root_token = None if root_token is None else int(root_token)
@@ -24,6 +25,8 @@ class Grammar:
         self.angle_tokens = set(int(t) for t in (angle_tokens or []))
         self.angle_parents = set(int(t) for t in (angle_parents or []))
         self.safe_terminal = None
+        # tokens that may not appear anywhere inside themselves (step, exp)
+        self.ban_nested = set(int(t) for t in (ban_nested or []))
         self.L = int(library.L)
         self.arities = np.asarray(library.arities, dtype=np.int64)
         self.PAD = self.L
@@ -119,7 +122,7 @@ class Grammar:
         if self.root_token is not None and len(self._real(tokens)) == 0:
             mask[self.root_token] = True     # position 0: only the root token
             return mask
-        anc = self.open_ancestors(tokens) if self.angle_tokens else None
+        anc = self.open_ancestors(tokens) if (self.angle_tokens or self.ban_nested) else None
         angle_ok = bool(anc) and anc[-1] in self.angle_parents
         for tid in range(self.L):
             if self.const_token is not None and tid == self.const_token and const_count >= self.max_const:
@@ -127,6 +130,8 @@ class Grammar:
             if self.root_token is not None and tid == self.root_token:
                 continue
             if tid in self.angle_tokens and not angle_ok:
+                continue
+            if tid in self.ban_nested and anc is not None and tid in anc:
                 continue
             if self._would_nest_trig(tokens, tid):
                 continue

@@ -28,6 +28,7 @@ def make_prior(library, config_prior):
         "const" : ConstConstraint,
         "no_inputs" : NoInputsConstraint,
         "root" : RootConstraint,
+        "nonest" : NoNestConstraint,
         "soft_length" : SoftLengthPrior,
         "uniform_arity" : UniformArityPrior,
         # "lyapunov_conditions": LyapunovConditionPrior
@@ -573,6 +574,46 @@ class RootConstraint(Constraint):
     def describe(self):
         return "{}: first token is {}, never again.".format(
             self.__class__.__name__, self.library.names[self.token])
+
+
+class NoNestConstraint(Constraint):
+    """Each of `tokens` may not appear anywhere inside itself (step(step(.)),
+    exp(exp(.))): nested compositions blow up derivative code generation
+    (blind skeleton search, C50). Sampler mask via ancestors(); GP offspring
+    via a pure-python pre-order walk (the jit descendant check missed cases)."""
+
+    def __init__(self, library, tokens):
+        Prior.__init__(self, library)
+        self.tokens = np.array([int(t) for t in library.actionize(tokens)], dtype=np.int32)
+
+    def __call__(self, actions, parent, sibling, dangling):
+        prior = np.zeros((actions.shape[0], self.L), dtype=np.float32)
+        for t in self.tokens:
+            mask = ancestors(actions=actions, arities=self.library.arities,
+                             ancestor_tokens=np.array([t], dtype=np.int32))
+            prior += self.make_constraint(mask, [t])
+        return prior
+
+    def is_violated(self, actions, parent, sibling):
+        actions = np.asarray(actions).reshape(-1)
+        banned = set(int(t) for t in self.tokens)
+        stack = []                                   # [token, remaining children]
+        for tok in actions:
+            tok = int(tok)
+            if tok in banned and any(a == tok for a, _ in stack):
+                return True
+            if stack:
+                stack[-1][1] -= 1
+            ar = int(self.library.arities[tok])
+            if ar > 0:
+                stack.append([tok, ar])
+            while stack and stack[-1][1] == 0:
+                stack.pop()
+        return False
+
+    def describe(self):
+        return "{}: [{}] cannot be nested inside themselves.".format(
+            self.__class__.__name__, ", ".join(self.library.names[t] for t in self.tokens))
 
 
 class InverseUnaryConstraint(Constraint):

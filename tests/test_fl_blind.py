@@ -146,3 +146,21 @@ def test_flat_V_is_capped():
     assert ok and ok3
     assert pen_flat > 2.0 and 1.0 / (1.0 + pen_flat) < 0.34
     assert pen3 < pen_flat
+
+
+def test_complexity_caps_reject_nested_monsters():
+    import time
+    judge, sv = _judge()
+    x1, x2, x3 = sv
+    pair = sym.Function("pair")
+    step = sym.Function("step")
+    e = x3
+    for _ in range(6):
+        e = step(sym.exp(e * x2) + sym.cos(x2**2) * e)
+    monster = pair(step(sym.cos(x2)) * e, x3 * e)
+    t0 = time.time()
+    pen, A, ok = judge.penalty(monster)
+    assert not ok
+    assert time.time() - t0 < 10.0
+    # the reference (nesting depth 1, ~150 ops) is unaffected
+    assert judge.penalty(reference_pair(order=4))[2]
