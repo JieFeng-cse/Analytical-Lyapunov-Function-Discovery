@@ -29,6 +29,7 @@ def make_prior(library, config_prior):
         "no_inputs" : NoInputsConstraint,
         "root" : RootConstraint,
         "nonest" : NoNestConstraint,
+        "slot" : SlotConstraint,
         "soft_length" : SoftLengthPrior,
         "uniform_arity" : UniformArityPrior,
         # "lyapunov_conditions": LyapunovConditionPrior
@@ -574,6 +575,45 @@ class RootConstraint(Constraint):
     def describe(self):
         return "{}: first token is {}, never again.".format(
             self.__class__.__name__, self.library.names[self.token])
+
+
+class SlotConstraint(Constraint):
+    """Template slot search (spec 2026-10-17): position 0 is the root tmpl<n>,
+    position i (1..n) may only hold a choice token of slot i-1 (names S<i-1>_<j>)."""
+
+    def __init__(self, library, root):
+        Prior.__init__(self, library)
+        self.root = int(library.actionize(root)[0])
+        n = int(library.arities[self.root])
+        self.slot_tokens = []
+        for i in range(n):
+            ids = [k for k, nm in enumerate(library.names) if nm.startswith("S{}_".format(i))]
+            assert ids, "no tokens for slot {}".format(i)
+            self.slot_tokens.append(np.array(ids, dtype=np.int32))
+        self.n = n
+
+    def initial_prior(self):
+        prior = np.full((self.L,), -np.inf, dtype=np.float32)
+        prior[self.root] = 0.0
+        return prior
+
+    def __call__(self, actions, parent, sibling, dangling):
+        pos = actions.shape[1]
+        prior = np.full((actions.shape[0], self.L), -np.inf, dtype=np.float32)
+        if 1 <= pos <= self.n:
+            prior[:, self.slot_tokens[pos - 1]] = 0.0
+        else:
+            prior[:] = 0.0                      # sequence complete; ignored
+        return prior
+
+    def is_violated(self, actions, parent, sibling):
+        a = np.asarray(actions).reshape(-1)
+        if a.size != self.n + 1 or a[0] != self.root:
+            return True
+        return any(int(a[i + 1]) not in set(self.slot_tokens[i].tolist()) for i in range(self.n))
+
+    def describe(self):
+        return "{}: tmpl root + {} positional slot choices.".format(self.__class__.__name__, self.n)
 
 
 class NoNestConstraint(Constraint):

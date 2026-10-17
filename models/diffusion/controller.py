@@ -58,7 +58,11 @@ class DiffusionController(nn.Module):
                 break
 
         root_token, angle_tokens, angle_parents, ban_nested = None, None, None, []
+        slot_tokens = None
         for p in prior.priors:
+            if p.__class__.__name__ == "SlotConstraint":
+                root_token = int(p.root)
+                slot_tokens = [list(map(int, s)) for s in p.slot_tokens]
             if p.__class__.__name__ == "RootConstraint":
                 root_token = int(p.token)
             if p.__class__.__name__ == "RelationalConstraint":
@@ -71,7 +75,8 @@ class DiffusionController(nn.Module):
                 ban_nested.extend(int(t) for t in p.tokens)
         self.grammar = Grammar(library, max_const=max_const, max_len=self.max_length,
                                root_token=root_token, angle_tokens=angle_tokens,
-                               angle_parents=angle_parents, ban_nested=ban_nested)
+                               angle_parents=angle_parents, ban_nested=ban_nested,
+                               slot_tokens=slot_tokens)
         assert vocab_size is not None, "vocab_size (dynamics prefix vocab) is required"
         self.denoiser = MaskedDiffusionDenoiser(
             self.n_choices, self.max_length, dyn_vocab_size=vocab_size,

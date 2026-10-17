@@ -51,6 +51,7 @@ class Template:
     parts: list
     slots: dict = field(default_factory=dict)
     conditions: list = field(default_factory=list)
+    param_ranges: dict = field(default_factory=dict)   # unknown positive constants -> (lo, hi)
 
 
 @dataclass
@@ -182,6 +183,7 @@ def evaluate(T, cfg=None, theta_windows=True, n_samples=64, seed=0, verbose=Fals
     cfg = cfg or CheckConfig()
     cfg.params = dict(cfg.params)
     cfg.params[THETA] = float(T.theta)
+    cfg.param_ranges = dict(T.param_ranges)
     checker = TropicalChecker(S.space, S.r, cfg)
     results = {}
     ledgers = []
@@ -241,6 +243,7 @@ def evaluate(T, cfg=None, theta_windows=True, n_samples=64, seed=0, verbose=Fals
                       T.conditions, time.time() - t0)
 
     params = {THETA: float(T.theta)}
+    params.update(T.param_ranges)
     led = Ledger(S.space, S.r, ledgers, params=params, n_samples=n_samples, seed=seed)
     bad_blocks = 0
     rows = []

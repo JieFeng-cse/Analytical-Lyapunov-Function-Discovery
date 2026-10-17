@@ -72,36 +72,11 @@ class Coef:
 
     @classmethod
     def from_sympy(cls, ctx, expr):
-        from utils.fl_multiphase import _mode_table
-        expr = sym.expand(sym.sympify(expr))
-        if expr == 0:
-            return cls(ctx)
-        if not (expr.free_symbols & set(ctx.angles)):
-            table = {ctx.zero_n: (expr, sym.S.Zero)}
-        else:
-            table = _mode_table(expr, list(ctx.angles))
-        out = cls(ctx)
-        for n, (a, b) in table.items():
-            for trig, c in ((0, a), (1, b)):
-                c = sym.expand(c)
-                if c == 0:
-                    continue
-                if ctx.params:
-                    if c.free_symbols - set(ctx.params):
-                        raise ValueError(f"coefficient depends on non-parameter symbols: {c}")
-                    poly = sym.Poly(c, *ctx.params)
-                    items = [(tuple(int(e) for e in mon), v) for mon, v in poly.terms()]
-                else:
-                    if c.free_symbols:
-                        raise ValueError(f"coefficient has free symbols {c.free_symbols} (no params declared)")
-                    items = [((), c)]
-                for pe, v in items:
-                    cm = _canon_mode(tuple(int(x) for x in n), trig, _num(v))
-                    if cm is None:
-                        continue
-                    key = (cm[0], trig, pe)
-                    out.d[key] = out.d.get(key, 0) + cm[2]
-        return out.clean()
+        """Exact conversion by recursion on the expression tree: sin/cos of integer
+        linear combinations of the angles are atoms, products and integer powers use
+        the product-to-sum rule, parameters enter as polynomials.  No TR8 (which can
+        leave unreduced powers such as cos(2x)**2)."""
+        return _conv(ctx, sym.sympify(expr))
 
     # -- algebra --
     def clean(self):
@@ -227,3 +202,56 @@ class Coef:
 
     def __repr__(self):
         return f"Coef({self.to_sympy()})"
+
+
+def _param_mono(ctx, sym_, power):
+    pe = [0] * ctx.nPar
+    pe[ctx.params.index(sym_)] = power
+    return tuple(pe)
+
+
+def _conv(ctx, e):
+    if e.is_Number:
+        return Coef.const(ctx, _num(e))
+    if e.is_Symbol:
+        if e in ctx.params:
+            return Coef(ctx, {(ctx.zero_n, 0, _param_mono(ctx, e, 1)): Fraction(1)})
+        raise ValueError(f"coefficient depends on non-parameter symbol {e}")
+    if e.is_Add:
+        out = Coef(ctx)
+        for a in e.args:
+            out = out + _conv(ctx, a)
+        return out
+    if e.is_Mul:
+        out = Coef.const(ctx, 1)
+        for a in e.args:
+            out = out * _conv(ctx, a)
+        return out
+    if e.is_Pow:
+        base, ex = e.args
+        if ex.is_Integer and int(ex) >= 0:
+            b = _conv(ctx, base)
+            out = Coef.const(ctx, 1)
+            for _ in range(int(ex)):
+                out = out * b
+            return out
+        if base.is_Number or (ex.is_Integer and base.is_Symbol and base in ctx.params and False):
+            return Coef.const(ctx, _num(e))
+        if not (base.free_symbols & set(ctx.angles)) and not (base.free_symbols - set(ctx.params)) \
+                and not base.free_symbols:
+            return Coef.const(ctx, _num(e))
+        raise ValueError(f"coefficient is not a trigonometric polynomial: {e}")
+    if isinstance(e, (sym.sin, sym.cos)):
+        arg = sym.expand(e.args[0])
+        n = [arg.coeff(a) for a in ctx.angles]
+        rest = sym.expand(arg - sum(c * a for c, a in zip(n, ctx.angles)))
+        if rest != 0 or any(not sym.sympify(c).is_integer for c in n):
+            raise ValueError(f"trig argument is not an integer combination of angles: {e}")
+        t = 0 if isinstance(e, sym.cos) else 1
+        cm = _canon_mode(tuple(int(c) for c in n), t, Fraction(1))
+        if cm is None:
+            return Coef(ctx)
+        return Coef(ctx, {(cm[0], t, ctx.zero_pe): cm[2]})
+    if not e.free_symbols:
+        return Coef.const(ctx, _num(e))
+    raise ValueError(f"unsupported coefficient expression: {e}")

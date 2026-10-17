@@ -19,6 +19,10 @@ FL_TEMPLATE = os.environ.get("LYA_FL_TEMPLATE", "") == "1"
 # searches pair(rho, ptilde) with only the three-term skeleton of V known.
 FL_BLIND = os.environ.get("LYA_FL_BLIND", "") == "1"
 assert not (FL_BLIND and FL_TEMPLATE), "LYA_FL_BLIND and LYA_FL_TEMPLATE are mutually exclusive"
+# Template slot search (spec 2026-10-17): LYA_FL_TMPL=1 samples tmpl<n>(slot choices)
+# and scores them with the log-domain / tropical / splice evaluator (utils/fl_tmpl).
+FL_TMPL = os.environ.get("LYA_FL_TMPL", "") == "1"
+assert not (FL_TMPL and (FL_BLIND or FL_TEMPLATE)), "LYA_FL_TMPL excludes LYA_FL_BLIND / LYA_FL_TEMPLATE"
 BLIND_FUNCTION_SET = ["add", "sub", "mul", "div", "sin", "cos", "exp", "n2", "step", "pair", "1", "2"]
 BLIND_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blind_rotor2.json")
 
@@ -72,9 +76,23 @@ def apply_blind_overrides(cfg):
     return cfg
 
 
-def apply_slot_overrides(cfg):
+def apply_tmpl_overrides(cfg, N):
+    """Template slot search: the library is the root tmpl<n> + the slot choice tokens;
+    the only structural prior is the positional slot constraint (length is n+1)."""
+    from utils.fl_tmpl.slots import SLOT_MENUS, root_name, token_names
+    n = len(SLOT_MENUS[N])
+    cfg["task"]["function_set"] = token_names(N)
+    cfg["prior"] = {"slot": {"root": root_name(N), "on": True},
+                    "length": {"min_": None, "max_": n + 1, "on": True}}
+    return cfg
+
+
+def apply_slot_overrides(cfg, N=None):
     """Mutate a config_factory() dict for template mode. No-op otherwise
-    (blind mode applies its own overrides here as well)."""
+    (blind / tmpl modes apply their own overrides here as well)."""
+    if FL_TMPL:
+        assert N is not None, "pass N to apply_slot_overrides for LYA_FL_TMPL"
+        return apply_tmpl_overrides(cfg, N)
     if not FL_TEMPLATE:
         return apply_blind_overrides(cfg)
     stage = int(os.environ.get("LYA_FL_STAGE", "1"))
@@ -131,6 +149,11 @@ def make_rotor(N):
                                     for k, v in _json.loads(frozen_env).items()}
         else:
             spec["frozen_slots"] = {}
+    if FL_TMPL:
+        from fractions import Fraction as _Fr
+        from utils.fl_tmpl.slots import THETA_DEFAULT
+        spec["template"] = {"N": N, "theta": str(_Fr(os.environ.get("LYA_TMPL_THETA", str(THETA_DEFAULT[N])))),
+                            "n_samples": int(os.environ.get("LYA_TMPL_NSAMPLES", "32"))}
     if FL_BLIND:
         import json as _json
         assert N == 2, "blind mode is calibrated for N=2 only (example_config/blind_rotor2.json)"

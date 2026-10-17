@@ -466,6 +466,14 @@ def optomize_at_test(
                 p.optimize()
             return p.update_r()
 
+        if FL_SPEC is not None and FL_SPEC.get("template"):
+            # template slot search: evaluate the batch's distinct slot tuples in
+            # parallel first (utils/fl_tmpl/rl.prefill); the loop below hits the cache
+            from utils.fl_tmpl.rl import prefill as _tmpl_prefill
+            _t0 = time.time()
+            _n_new = _tmpl_prefill(programs, FL_SPEC["template"], n_proc=N_POOL)
+            log_and_print(f"[FL tmpl] epoch={epoch} new slot tuples evaluated={_n_new} "
+                          f"in {time.time() - _t0:.1f}s")
         r = np.array([_reward_of(p) for p in programs])
         r_train = r
 
@@ -672,7 +680,7 @@ def optomize_at_test(
             # the deterministic rebuild above. SHGO still runs in the final gate.
             from utils.fl_reward import fl_harvest
             sv, dr = dynamics()
-            if FL_SPEC.get("stage") or FL_SPEC.get("blind"):
+            if FL_SPEC.get("stage") or FL_SPEC.get("blind") or FL_SPEC.get("template"):
                 # Stage mode (C10): the residual objective has no counterexample
                 # notion yet -- keep the pristine training set. (Possible later:
                 # harvest worst-residual points.) Blind mode scores on its own
@@ -714,7 +722,7 @@ def optomize_at_test(
             if first_err is not None:
                 log_and_print(f"[FL harvest] epoch={epoch} first failure: {first_err}")
 
-            if FL_SPEC.get("stage") or FL_SPEC.get("blind"):
+            if FL_SPEC.get("stage") or FL_SPEC.get("blind") or FL_SPEC.get("template"):
                 # Stage/blind mode: keep X_train pristine and FIXED. The bootstrap
                 # resample would change the point set every epoch, adding reward
                 # noise and invalidating the fast-path field cache.
@@ -741,6 +749,17 @@ def optomize_at_test(
                 if FL_SPEC is None:
                     minimizer_check = [check_options(programs[i].sympy_expr[0] * 1e5, low_bound, up_bound)[0] if success[i] else False for i in range(len(success))]
                     overall_check = [final_check(programs[i].sympy_expr[0], low_bound, up_bound) if minimizer_check[i] else False for i in range(len(success))]
+                elif FL_SPEC.get("template"):
+                    # Template slot search: success (pen == 0) already means every
+                    # block is good or absorbed, the LP is feasible and there is no
+                    # positive cycle (utils/fl_tmpl); log the full report.
+                    overall_check = []
+                    for i in range(len(success)):
+                        if success[i]:
+                            rep = getattr(programs[i], "tmpl_report", None)
+                            log_and_print(f"[FL tmpl final] i={i} expr={programs[i].sympy_expr[0]}\n"
+                                          f"{rep.summary() if hasattr(rep, 'summary') else rep}")
+                        overall_check.append(bool(success[i]))
                 elif FL_SPEC.get("blind"):
                     # Blind mode final gate: dense float64 grid + random points on
                     # the trusted domain, then the far region at 30 digits
@@ -1012,6 +1031,10 @@ def optomize_at_test(
         if prev_r_best is None or r_max > prev_r_best:
             new_r_best = True
             p_r_best = programs[np.argmax(r)]
+            if FL_SPEC is not None and FL_SPEC.get("template"):
+                rep = getattr(p_r_best, "tmpl_report", None)
+                log_and_print(f"[FL tmpl] epoch={epoch} r_best={r_max:.6f} expr={p_r_best.sympy_expr[0]}\n"
+                              f"{rep.summary() if hasattr(rep, 'summary') else rep}")
             if FL_SPEC is not None and FL_SPEC.get("blind"):
                 log_and_print(f"[FL blind] epoch={epoch} r_best={r_max:.6f} "
                               f"A={getattr(p_r_best, 'blind_A', None)} expr={p_r_best.sympy_expr[0]}")

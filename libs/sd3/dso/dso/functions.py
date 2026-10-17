@@ -214,6 +214,15 @@ def create_tokens(n_input_var, function_set, protected, decision_tree_threshold_
 
             token = function_map[op]
 
+        # Template slot search (spec 2026-10-17): root tmpl<n> of arity n and
+        # choice terminals S<i>_<j>; their numpy functions are never used for scoring
+        elif isinstance(op, str) and op.startswith("tmpl") and op[4:].isdigit():
+            token = Token(lambda *args: args[0], op, arity=int(op[4:]), complexity=1)
+
+        elif isinstance(op, str) and op.startswith("S") and "_" in op \
+                and op[1:].replace("_", "").isdigit():
+            token = HardCodedConstant(0.0, name=op)
+
         # Hard-coded floating-point constant
         elif U.is_float(op):
             token = HardCodedConstant(op)

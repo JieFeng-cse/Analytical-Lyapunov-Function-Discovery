@@ -16,8 +16,10 @@ import numpy as np
 class Grammar:
     def __init__(self, library, max_const=10, ban_nested_trig=True, max_len=64,
                  root_token=None, angle_tokens=None, angle_parents=None,
-                 ban_nested=None):
+                 ban_nested=None, slot_tokens=None):
         self.library = library
+        # template slot search: position i >= 1 may only hold slot (i-1)'s tokens
+        self.slot_tokens = None if slot_tokens is None else [set(int(t) for t in s) for s in slot_tokens]
         # blind skeleton search: token forced at position 0, forbidden elsewhere
         self.root_token = None if root_token is None else int(root_token)
         # periodicity: angle input tokens allowed only as the direct child of
@@ -43,6 +45,7 @@ class Grammar:
             if int(t) not in self.angle_tokens:
                 self.safe_terminal = int(t)
                 break
+        self._slot_safe = None if self.slot_tokens is None else [min(s) for s in self.slot_tokens]
 
     # --- arity-aware completion (the "open slots" / dangling counter) -----------
     def arity(self, tok):
@@ -122,6 +125,12 @@ class Grammar:
         if self.root_token is not None and len(self._real(tokens)) == 0:
             mask[self.root_token] = True     # position 0: only the root token
             return mask
+        if self.slot_tokens is not None:
+            pos = len(self._real(tokens))
+            if 1 <= pos <= len(self.slot_tokens):
+                for tid in self.slot_tokens[pos - 1]:
+                    mask[tid] = True
+                return mask
         anc = self.open_ancestors(tokens) if (self.angle_tokens or self.ban_nested) else None
         angle_ok = bool(anc) and anc[-1] in self.angle_parents
         for tid in range(self.L):
@@ -143,6 +152,8 @@ class Grammar:
     # --- repair + fallback (design doc §7) --------------------------------------
     def fallback(self):
         t = self.safe_terminal
+        if self._slot_safe is not None:
+            return [self.root_token] + list(self._slot_safe)
         if self.root_token is None:
             return [t]
         return [self.root_token] + [t] * self.arity(self.root_token)
@@ -160,11 +171,16 @@ class Grammar:
                 break
             if not self.valid_token_mask(out)[tok]:   # invalid given context -> terminal
                 tok = self.safe_terminal
+                if self._slot_safe is not None and 1 <= len(out) <= len(self._slot_safe):
+                    tok = self._slot_safe[len(out) - 1]
             out.append(int(tok))
             if self.is_complete(out):
                 return out
         while self.dangling(out) > 0 and len(out) < self.max_len:
-            out.append(self.safe_terminal)
+            if self._slot_safe is not None and 1 <= len(out) <= len(self._slot_safe):
+                out.append(self._slot_safe[len(out) - 1])
+            else:
+                out.append(self.safe_terminal)
         return out if self.is_complete(out) else self.fallback()
 
     def pad_after_complete(self, tokens, length):

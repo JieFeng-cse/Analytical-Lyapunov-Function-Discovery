@@ -251,6 +251,15 @@ class RegressionTask(HierarchicalTask):
         from utils.fl_scaffold import fl_V_and_LV
         state_vars, drift = dynamics()
         spec = generator_spec()
+        if spec.get("template") is not None:
+            # Template slot search (spec 2026-10-17): decode the slot choices from
+            # the traversal and score them with utils/fl_tmpl; never execute().
+            from utils.fl_tmpl.rl import tmpl_penalty, program_names
+            pen, rep = tmpl_penalty(program_names(p), spec["template"])
+            if pen is None:
+                return self.invalid_reward
+            p.tmpl_report = rep
+            return 1.0 / (1.0 + pen)
         if spec.get("blind") is not None:
             # Blind skeleton search (spec 2026-09-07): score pair(rho, ptilde)
             # with the out-of-box log-domain judge; never execute()/y_hat.
@@ -321,6 +330,15 @@ class RegressionTask(HierarchicalTask):
             from utils.fl_scaffold import fl_V_and_LV
             state_vars, drift = dynamics()
             spec = generator_spec()
+            if spec.get("template") is not None:
+                from utils.fl_tmpl.rl import tmpl_penalty, program_names
+                pen, rep = tmpl_penalty(program_names(p), spec["template"])
+                ok = pen is not None
+                nmse_test = pen if ok else 1e6
+                if ok:
+                    p.tmpl_report = rep
+                return {"nmse_test": nmse_test, "nmse_test_noiseless": nmse_test,
+                        "success": bool(ok and pen == 0.0)}
             if spec.get("blind") is not None:
                 from utils.fl_blind import fl_blind_penalty
                 try:

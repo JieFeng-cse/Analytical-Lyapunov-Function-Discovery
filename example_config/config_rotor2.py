@@ -18,7 +18,7 @@ def generator_spec():
 
 
 def config_factory():
-    return apply_slot_overrides({
+    return apply_slot_overrides(N=_N, cfg={
         "task": {
             "task_type": "regression",
             "function_set": ["add", "sub", "mul", "div", "sin", "cos", "exp", "n2"],  # Koza
@@ -49,7 +49,7 @@ def config_factory():
             "uniform_arity": {"on": False},
             "soft_length": {"loc": 25, "scale": 5, "on": True},
         },
-    })
+    }, )
 
 
 def train_config_factory():

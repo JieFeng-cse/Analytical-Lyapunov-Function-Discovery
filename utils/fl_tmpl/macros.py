@@ -141,3 +141,114 @@ def load_macros_json(S, path):
         mac.check_bath_derivatives(S.baths)
         out[mac.name] = mac
     return out
+
+
+# ---- N=5 (conjectural template, spec section 2.5) ---------------------------------------
+C7 = sym.Symbol("c7", positive=True)       # L p~3 ~ -c7 p3^-7 (central bottleneck)
+AP = sym.Symbol("ap", positive=True)       # leak rate of a fast rotor into a slow interior neighbour
+
+
+def atomize(S, A, atom_name, coef):
+    """Rewrite coef * (monomials of the atom) inside A as coef * atom (so the macro
+    has a single lead monomial for its series)."""
+    sp = S.space
+    j = sp.atom_names().index(atom_name)
+    out = A.copy()
+    c = sp.coef(coef)
+    for en, cc in sp.atoms[j].monomials:
+        k = (tuple(list(en) + [Fraction(0)] * sp.nA), tuple(0 for _ in range(sp.nP)))
+        cur = out.terms.get(k)
+        sub = c * sp.coef(cc)
+        if cur is None or not (cur - sub).is_zero():
+            raise ValueError(f"atomize: {atom_name} monomial {en} not present with coefficient {coef}")
+        del out.terms[k]
+    akey = sp.monomial_key({atom_name: 1})
+    out.terms[akey] = c
+    return out, akey
+
+
+def explicit_pair_energy(S, mi, mj, atom_name):
+    """E = (p~_i^2 + p~_j^2)/2 from two computed slow momenta (two separated fast
+    rotors, e.g. p2 and p4 in N=5): exact data by symbolic L."""
+    expr = (mi.expr**2 + mj.expr**2) / 2
+    m = explicit_macro(S, f"E{mi.fast[0]}{mj.fast[0]}", expr, kind="slow_energy",
+                       fast=mi.fast + mj.fast)
+    m.value, m.lead_key = atomize(S, m.value, atom_name, sym.Rational(1, 2))
+    m.ref = f"(p~{mi.fast[0]}^2 + p~{mj.fast[0]}^2)/2, computed"
+    return m
+
+
+def conjecture_bottleneck(S, base, rem_degree=2, noise_order=5):
+    """p~3 for N=5: value = computed first averaging layer (base), and the
+    conjectured second-layer drift  L p~3 = -c7 p3^-7 + O(z p3^-8)  (benchmark eq. 29,
+    CE Remark 5.3, CONCLUSIONS C41/C42); bath derivatives d_{p_b} p~3 = O(z p3^-noise_order)."""
+    p3 = S.P(3)
+    slow = [b for b in (1, 2, 4, 5)]
+    Lv = S.asym(-C7 / p3**7)
+    Lv.rem |= set(_rem_poly(S, {p3: -8}, slow, rem_degree))
+    d = {}
+    for b in S.baths:
+        A = AsymSum(S.space)
+        A.rem |= set(_rem_poly(S, {p3: -noise_order}, slow, rem_degree))
+        d[b] = A
+    m = Macro("pt3c", "slow_momentum", (3,), base.value, Lv, d, base.lead_key, "conjecture",
+              expr=None, ref="conjecture: L p~3 = -c7 p3^-7 (second averaging layer open, C42)")
+    m.conditions = ["c7 > 0 (central bottleneck rate, unproved)",
+                    f"d_p_b p~3 = O(p3^-{noise_order})"]
+    return m
+
+
+def conjecture_pair_energy(S, fast, rem_degree=2):
+    """H~ for two adjacent fast interior rotors with the third interior rotor slow
+    (N=5: (2,3) or (3,4)).  Conjecture: the outer fast rotor leaks into its bath
+    neighbour with the CE rate alpha = gamma <W^2> = 1/2, the inner one into its slow
+    interior neighbour with an unknown rate ap > 0:
+        L H~ = -alpha/p_out^2 - ap/p_in^2 + O(z (|p_out|^-5/2 + |p_in|^-5/2)).
+    """
+    i, j = fast
+    out_, in_ = (i, j) if i == 2 else (j, i)          # rotor next to a bath first
+    bath = 1 if out_ == 2 else 5
+    other_bath = 5 if bath == 1 else 1
+    slow = [b for b in range(1, S.N + 1) if b not in fast]
+    atom = f"A{min(i, j)}{max(i, j)}"
+    akey = S.space.monomial_key({atom: 1})
+    value = AsymSum(S.space, {akey: S.space.coef(sym.Rational(1, 2))})
+    value.rem |= set(_rem_poly(S, {}, slow, rem_degree))
+    po, pi = S.P(out_), S.P(in_)
+    Lv = S.asym(-sym.Rational(1, 2) / po**2 - AP / pi**2)
+    Lv.rem |= set(_rem_poly(S, {po: sym.Rational(-5, 2)}, slow, rem_degree))
+    Lv.rem |= set(_rem_poly(S, {pi: sym.Rational(-5, 2)}, slow, rem_degree))
+    bond = S.R(1) if bath == 1 else S.R(S.N - 1)
+    d_b = S.asym(-sym.cos(bond) / po)
+    d_b.rem |= set(_rem_poly(S, {po: -2}, slow, rem_degree))
+    d_o = AsymSum(S.space)
+    d_o.rem |= set(_rem_poly(S, {pi: -2}, slow, rem_degree))
+    m = Macro(f"H{min(i, j)}{max(i, j)}", "slow_energy", tuple(sorted(fast)), value, Lv,
+              {bath: d_b, other_bath: d_o}, akey, "conjecture",
+              ref=f"conjecture: L H~ = -1/2 p{out_}^-2 - ap p{in_}^-2")
+    m.conditions = ["ap > 0 (leak into a slow interior neighbour, unproved)"]
+    return m
+
+
+def conjecture_receiver(S, rem_degree=2):
+    """Global receiver for N=5, all three interior rotors fast, both baths cold.
+    Conjecture: the total interior energy leaks only through the outer interior
+    rotors, each with the CE rate:
+        L H~234 = -1/2 p2^-2 - 1/2 p4^-2 + O(z (|p2|^-5/2 + |p4|^-5/2)),
+        d_p1 H~234 = W(r1)/p2 + O(z p2^-2),  d_p5 H~234 = W(r4)/p4 + O(z p4^-2)."""
+    slow = [1, 5]
+    akey = S.space.monomial_key({"A234": 1})
+    value = AsymSum(S.space, {akey: S.space.coef(sym.Rational(1, 2))})
+    value.rem |= set(_rem_poly(S, {}, slow, rem_degree))
+    p2, p4 = S.P(2), S.P(4)
+    Lv = S.asym(-sym.Rational(1, 2) / p2**2 - sym.Rational(1, 2) / p4**2)
+    Lv.rem |= set(_rem_poly(S, {p2: sym.Rational(-5, 2)}, slow, rem_degree))
+    Lv.rem |= set(_rem_poly(S, {p4: sym.Rational(-5, 2)}, slow, rem_degree))
+    d1 = S.asym(-sym.cos(S.R(1)) / p2)
+    d1.rem |= set(_rem_poly(S, {p2: -2}, slow, rem_degree))
+    d5 = S.asym(-sym.cos(S.R(4)) / p4)
+    d5.rem |= set(_rem_poly(S, {p4: -2}, slow, rem_degree))
+    m = Macro("H234", "slow_energy", (2, 3, 4), value, Lv, {1: d1, 5: d5}, akey, "conjecture",
+              ref="conjecture: L H~234 = -1/2 p2^-2 - 1/2 p4^-2 (receiver; resonances and multi-scale averaging open, CE Remark 5.3)")
+    m.conditions = ["receiver H~234 drift (unproved; resonant surfaces p2 ~ p3 ~ p4 not treated)"]
+    return m
