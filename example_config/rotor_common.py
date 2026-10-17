@@ -82,8 +82,16 @@ def apply_tmpl_overrides(cfg, N):
     from utils.fl_tmpl.slots import SLOT_MENUS, root_name, token_names
     n = len(SLOT_MENUS[N])
     cfg["task"]["function_set"] = token_names(N)
+    # DSO's load_config merges the default priors back in (config_common.json):
+    # every default must be switched off explicitly -- no_inputs in particular
+    # forbids every token at the last slot (no input variable in the program) and
+    # turned the transformer's logits into NaN (local smoke 2026-10-17)
+    off = {"on": False}
     cfg["prior"] = {"slot": {"root": root_name(N), "on": True},
-                    "length": {"min_": None, "max_": n + 1, "on": True}}
+                    "length": {"min_": None, "max_": n + 1, "on": True},
+                    "relational": dict(off), "repeat": dict(off), "inverse": dict(off),
+                    "trig": dict(off), "const": dict(off), "no_inputs": dict(off),
+                    "uniform_arity": dict(off), "soft_length": dict(off)}
     return cfg
 
 

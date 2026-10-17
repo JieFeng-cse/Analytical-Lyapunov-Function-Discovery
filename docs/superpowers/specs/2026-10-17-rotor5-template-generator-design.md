@@ -334,6 +334,63 @@ region at `R ∈ {10², 10³, 10⁴}`; failures are reported, not used in the re
 6. Danus forbids computation inside its project (AGENTS.md); everything here runs in
    this repo.
 
-## 9. As built
+## 9. As built (2026-10-17)
 
-(filled in after implementation)
+Modules (`utils/fl_tmpl/`): `fourier.py` (exact Fourier coefficients: modes in the
+bond angles x polynomials in the parameters theta/c7/ap, product-to-sum, recursive
+conversion from sympy -- replaces sympy coefficients, whose TR8 canonicalisation was
+the bottleneck), `asym.py` (AsymSum, positive atoms, series with remainders, region
+pruner), `system.py`, `averaging.py`, `macros.py`, `logdomain.py`, `tropical.py`,
+`splice.py`, `template.py`, `reference.py` (N=3/4/5 builders, paper slots),
+`slots.py` (menus, token names, decode), `rl.py` (cached reward, pool prefill).
+
+Decisions taken while building (not in the source):
+
+* h^alpha is the positive atom Ah = sum p_i^2/2 times (1 + O(1/Ah)); the floor for
+  pruning K is -2 alpha (a K term below it everywhere on the region can never give G
+  an order >= 0).  Series components whose lead-level contributions (incl. the Gamma
+  cross term) are below the floor are skipped -- in practice the gap factor and the
+  prefactor never enter G, only the junction ledger (the source's "间隙因子对漂移几乎没有代价").
+* The theta window is "largest theta with every block of the part good" (bisection
+  over the full tropical check), not the coefficient at one direction: at the
+  diagonal of V_c the two rotors' terms compensate and a single-direction probe gave
+  0.5155 instead of 1/2.
+* Switch layers are bad sets with error order 2 alpha (the log-scale switch has
+  L psi = O(1) on bath momenta); main's cold-bath blocks are bad sets with the order
+  of G_main.  Absorption is tested pointwise at sampled directions of each bad set;
+  LP rows are generated at the same directions for the absorber that absorbs (or the
+  smallest deficit), the bounded level 0 is always an admissible "negative" so a
+  slack equals the missing exponent.
+* Cited O_c remainders carry z(p1,p4) as |p_b|^2 (rem_degree, a modelling choice);
+  the evaluator then requires m > 2 l rem_degree, the quantitative form of "m large".
+* Penalty = (#unabsorbed bad sets) + sum over bad sets of the largest LP slack / 0.05
+  + 5 [positive cycle].
+
+Calibration results (tests/test_tmpl_calibration.py, all pass):
+
+| check | N=3 | N=4 |
+|---|---|---|
+| paper V | pass; one constant junction main -> V2 (A large) | pass; one constant junction main -> V_c (M large); free-LP gap 0.126 in (2/l, 2/k) = (0.125, 0.333) |
+| gap removed | n/a (paper uses deg 2) | V_c layer s3 = 1/l unabsorbed, slack 2/l + 0.001 |
+| noise averaging removed | V2: theta_max 2/3 -> 1/3 | V2 1 -> 1/2, V3 1/2 -> 1/4, V_c 1/2 -> 1/4 |
+
+The automatically built noise factor is N = -theta^2 sin(2 r1)/(4 p2^3), i.e.
+F_2' = theta^2 gamma T (<W^2> - W^2) of CE Prop. 2.4.  Main's theta window is the
+Ito bound 1/T_max = 1/2.
+
+Single-fast averaging (computed macros) reproduces the benchmark drifts:
+L p~2 = -1/(2p^3) (N=2), -1/p^3 (N=3), -1/(2p^3) for both central rotors of N=4
+and for p~2, p~4 of N=5; p~3 of N=5 has zero mean through p^-3 and an oscillating
+residual at p^-4 (34 modes) -- the C42 obstruction, so p~3's drift enters N=5 only
+as the conjecture L p~3 = -c7 p3^-7.
+
+RL integration: tokens `tmpl<n>` / `S<i>_<j>` registered in `create_tokens`;
+`SlotConstraint` (prior key `slot`); diffusion `Grammar(slot_tokens=...)`;
+`LYA_FL_TMPL=1`, `LYA_TMPL_THETA`, `LYA_TMPL_NSAMPLES`, optional `LYA_TMPL_DANUS`;
+`apply_slot_overrides(cfg, N)`; jobs `repro/{setup_runs,run_one,submit}_rotor_tmpl*`.
+N=2/3 slot spaces have 420 tuples and most pass (as the source predicts: "N=3
+几乎没有需要搜索的部分"); N=4 has ~3e6 tuples, 4-8 s per new tuple.
+
+Known gaps beyond section 8: R12/R23 not rebuilt (cited); N=5 parts conjectural;
+`tests/test_rotor_configs.py::test_csv_row` fails on the base branch already (CSV
+box changed to +-15 earlier), unrelated to this work.
