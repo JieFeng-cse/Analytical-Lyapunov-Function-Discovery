@@ -22,6 +22,9 @@ assert not (FL_BLIND and FL_TEMPLATE), "LYA_FL_BLIND and LYA_FL_TEMPLATE are mut
 # Template slot search (spec 2026-10-17): LYA_FL_TMPL=1 samples tmpl<n>(slot choices)
 # and scores them with the log-domain / tropical / splice evaluator (utils/fl_tmpl).
 FL_TMPL = os.environ.get("LYA_FL_TMPL", "") == "1"
+# Free grammar (spec 2026-10-17 section 10): with LYA_FL_TMPL=1, LYA_TMPL_FREE=1 samples
+# free<n>(g_1..g_n), one local shape g(u) per part (u = |p~_j| from the averaging macro)
+FL_TMPL_FREE = FL_TMPL and os.environ.get("LYA_TMPL_FREE", "") == "1"
 assert not (FL_TMPL and (FL_BLIND or FL_TEMPLATE)), "LYA_FL_TMPL excludes LYA_FL_BLIND / LYA_FL_TEMPLATE"
 BLIND_FUNCTION_SET = ["add", "sub", "mul", "div", "sin", "cos", "exp", "n2", "step", "pair", "1", "2"]
 BLIND_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blind_rotor2.json")
@@ -95,11 +98,36 @@ def apply_tmpl_overrides(cfg, N):
     return cfg
 
 
+def apply_free_overrides(cfg, N):
+    """Free grammar: root free<n>, shape trees over u and the constants 1, 2; the
+    state variables x_i are never allowed (relational ban under every token)."""
+    from utils.fl_tmpl.freeform import G_TOKENS, root_name
+    from utils.fl_tmpl.reference import free_parts
+    n = len(free_parts(N))
+    root = root_name(n)
+    fs = [root] + list(G_TOKENS)
+    cfg["task"]["function_set"] = fs
+    off = {"on": False}
+    xs = [f"x{i}" for i in range(1, 2 * N)]
+    lmax = int(os.environ.get("LYA_TMPL_LENMAX", str(1 + 14 * n)))
+    cfg["prior"] = {"root": {"token": root, "on": True},
+                    "relational": {"targets": xs, "effectors": fs, "relationship": "child", "on": True},
+                    "nonest": {"tokens": ["exp", "log"], "on": True},
+                    "inverse": {"on": True},
+                    "length": {"min_": 1 + n, "max_": lmax, "on": True},
+                    "soft_length": {"loc": 1 + 5 * n, "scale": 4, "on": True},
+                    "repeat": dict(off), "trig": dict(off), "const": dict(off),
+                    "no_inputs": dict(off), "uniform_arity": dict(off)}
+    return cfg
+
+
 def apply_slot_overrides(cfg, N=None):
     """Mutate a config_factory() dict for template mode. No-op otherwise
     (blind / tmpl modes apply their own overrides here as well)."""
     if FL_TMPL:
         assert N is not None, "pass N to apply_slot_overrides for LYA_FL_TMPL"
+        if FL_TMPL_FREE:
+            return apply_free_overrides(cfg, N)
         return apply_tmpl_overrides(cfg, N)
     if not FL_TEMPLATE:
         return apply_blind_overrides(cfg)
@@ -161,7 +189,8 @@ def make_rotor(N):
         from fractions import Fraction as _Fr
         from utils.fl_tmpl.slots import THETA_DEFAULT
         spec["template"] = {"N": N, "theta": str(_Fr(os.environ.get("LYA_TMPL_THETA", str(THETA_DEFAULT[N])))),
-                            "n_samples": int(os.environ.get("LYA_TMPL_NSAMPLES", "32"))}
+                            "n_samples": int(os.environ.get("LYA_TMPL_NSAMPLES", "32")),
+                            "free": FL_TMPL_FREE}
     if FL_BLIND:
         import json as _json
         assert N == 2, "blind mode is calibrated for N=2 only (example_config/blind_rotor2.json)"

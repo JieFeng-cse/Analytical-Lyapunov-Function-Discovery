@@ -219,6 +219,14 @@ def create_tokens(n_input_var, function_set, protected, decision_tree_threshold_
         elif isinstance(op, str) and op.startswith("tmpl") and op[4:].isdigit():
             token = Token(lambda *args: args[0], op, arity=int(op[4:]), complexity=1)
 
+        # Free grammar (spec 2026-10-17 section 10): root free<n> over n shape trees
+        # and the shape variable u = |p~|; scored symbolically, never executed
+        elif isinstance(op, str) and op.startswith("free") and op[4:].isdigit():
+            token = Token(lambda *args: args[0], op, arity=int(op[4:]), complexity=1)
+
+        elif op == "u":
+            token = HardCodedConstant(0.0, name="u")
+
         elif isinstance(op, str) and op.startswith("S") and "_" in op \
                 and op[1:].replace("_", "").isdigit():
             token = HardCodedConstant(0.0, name=op)

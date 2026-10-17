@@ -22,6 +22,7 @@ export LYA_SEED_START="${LYA_SEED_START:-1}"
 export LYA_SEED_RUNS=1
 export LYA_NSAMPLES="${LYA_NSAMPLES:-400000}"
 export LYA_FL_TMPL=1
+export LYA_TMPL_FREE="${LYA_TMPL_FREE:-0}"
 
 if [[ "${ARM:-transformer}" == "diffusion" ]]; then
   export LYA_CONTROLLER=DiffusionController
@@ -29,6 +30,6 @@ if [[ "${ARM:-transformer}" == "diffusion" ]]; then
   export LYA_LAMBDA="${LYA_LAMBDA:-0.5}"
 fi
 
-echo "[rotor-tmpl] sys=$SYS bm=$BM arm=${ARM:-transformer} host=$(hostname) gpu=${CUDA_VISIBLE_DEVICES:-none} start=$(date -Is)"
+echo "[rotor-tmpl] free=$LYA_TMPL_FREE sys=$SYS bm=$BM arm=${ARM:-transformer} host=$(hostname) gpu=${CUDA_VISIBLE_DEVICES:-none} start=$(date -Is)"
 python -u Lyapunov_test_dso.py
 echo "[rotor-tmpl] done sys=$SYS arm=${ARM:-transformer} end=$(date -Is)"

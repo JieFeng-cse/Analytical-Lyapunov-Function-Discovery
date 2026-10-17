@@ -7,6 +7,7 @@ A part is V_r = exp(F), F = sum_k phi_k(Y_k) over components:
     energy_sq theta * Y^2 / 2   (averaged energy of a slow momentum)
     energy_lin theta * Y        (averaged energy given directly, H~_c or H)
     log1p    log(1 + Y)         (noise-averaging factor, Y small)
+    free     log g(|Y|)         (free-grammar shape, param = freeform.expand_shape data)
 
 Chain rule:  L F = sum phi'(Y) L Y + sum_b kappa_b phi''(Y) (d_b Y)^2,
              d_b F = sum phi'(Y) d_b Y,   Gamma = sum_b kappa_b (d_b F)^2.
@@ -32,6 +33,8 @@ class Component:
     param: object = None
 
     def label(self):
+        if self.kind == "free":
+            return f"free({self.macro.name}, {self.param.get('g')})"
         return f"{self.kind}({self.macro.name}{'' if self.param is None else ', ' + str(self.param)})"
 
 
@@ -53,6 +56,9 @@ def phi_derivs(comp, nmax=4):
     if k == "energy_lin":
         th = sym.sympify(comp.param)
         return AsymSum.const(sp, th), AsymSum(sp)
+    if k == "free":
+        from utils.fl_tmpl.freeform import phi_derivs_free
+        return phi_derivs_free(Y, comp.macro.lead_key, comp.param, nmax)
     if k == "log1p":
         p1 = Y.series_1p([(-1) ** n for n in range(nmax + 1)], nmax)
         p2 = Y.series_1p([(-1) ** (n + 1) * (n + 1) for n in range(nmax + 1)], nmax)

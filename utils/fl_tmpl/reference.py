@@ -146,3 +146,28 @@ ANSATZ5_SLOTS = {"k": 6, "l": 16, "m": 128, "lr": 16,
                  "gap3": None, "a3": None, "deg3": 6,
                  "gap4": "pt4", "a4": Fraction(1, 4), "deg4": 0,
                  "deg24": 1, "degp": 1, "recv": "H234", "degr": 1}
+
+
+# ---- free grammar (spec section 10) ----------------------------------------------------
+FREE_K = (2, 3, 4, 6, 8)
+
+
+def free_parts(N):
+    """Parts whose shape g is searched: one per interior rotor (single-fast region)."""
+    if N in (2, 3):
+        return ["V2"]
+    raise NotImplementedError(f"free grammar not wired for N={N} yet")
+
+
+def build_free(N, shapes, k, theta=Fraction(1, 4), noise_avg=True):
+    """V = 1 + e^{theta H} + sum_j psi_j g_j(|p~_j|) e^{theta p~_j^2/2} (1 + N_j).
+    shapes: {part name: freeform.expand_shape data}; k: single-fast region exponent."""
+    S, M = macros_for(N)
+    nP = N
+    parts = [PartSpec("main", (), is_main=True, regions=[region_full(nP, t) for t in range(nP)])]
+    for j in S.interior:
+        nm = f"V{j}"
+        parts.append(PartSpec(nm, (j,), energy=f"pt{j}", energy_kind="sq", shape=shapes[nm],
+                              regions=[region_single_fast(nP, j - 1, k)], noise_avg=noise_avg))
+    alpha = 3 if N == 5 else 1
+    return Template(S, alpha, Fraction(theta), M, parts, {"k": k}, [])

@@ -3,7 +3,8 @@
 # template slot search (spec 2026-10-17). Usage: setup_runs_rotor_tmpl.sh [systems...]
 set -euo pipefail
 ROOT=/anvil/scratch/x-cchen47/ALFD-rotor5
-RUNS_BASE=/anvil/scratch/x-cchen47/LyaDis/runs_rotor_tmpl
+# RUNS_BASE env overrides (free grammar: runs_rotor_free)
+RUNS_BASE="${RUNS_BASE:-/anvil/scratch/x-cchen47/LyaDis/runs_rotor_tmpl}"
 SYSTEMS=("${@:-rotor2 rotor3 rotor4}")
 cd "$ROOT"
 for sys in ${SYSTEMS[@]}; do

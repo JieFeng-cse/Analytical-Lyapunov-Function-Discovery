@@ -394,3 +394,54 @@ N=2/3 slot spaces have 420 tuples and most pass (as the source predicts: "N=3
 Known gaps beyond section 8: R12/R23 not rebuilt (cited); N=5 parts conjectural;
 `tests/test_rotor_configs.py::test_csv_row` fails on the base branch already (CSV
 box changed to +-15 earlier), unrelated to this work.
+
+## 10. Free grammar for the local shapes (2026-10-17, after user review)
+
+**Why.** The slot template of section 2 hands the generator the answers' shapes: the
+N=3 reference (benchmark eq. 21, CEP 2015) is `p~^2 e^{theta p~^2/2}` = slot deg2=2,
+and CE's N=4 gap `e^{|p~|^a}` is the gap slot.  Full enumeration of N=2/3 (240
+effective tuples each) gives 122 passes with the same pattern for both systems
+(no gap: deg >= 2 passes, deg 0/1 fails; gap: passes for a below a k-dependent
+bound), so epoch-0 success says nothing about search.  This is a *guided* track
+(benchmark protocol item 5), stronger than "reference forms in the grammar prior".
+
+**What is fixed (method-level priors)** -- unchanged from sections 1-4:
+- `1 + e^{theta H}` (forced by the target: log V = theta H + o(H));
+- the averaged variable Y = p~_j of each part, computed by the averaging macro
+  (option 1 of the discussion; p~ must be right through p^-3 -- truncation test:
+  N=2/3 paper V has penalty 1000/3/3/0 (N=2) and 1000/6/7/0 (N=3) with p~ kept to
+  p^0/p^-1/p^-2/p^-3; a blind p~ search was tried before in C46-C50);
+- the energy factor `e^{theta p~^2/2}`, the noise-averaging factor, the evaluator
+  (log domain, tropical blocks, splice LP, Bellman-Ford).
+
+**What is searched.** Each part is `V_r = g_r(|p~_j|) e^{theta p~_j^2/2} (1 + N_r)`,
+the shape g_r of one variable u = |p~_j| > 0 is a free expression tree over
+`add sub mul div exp log sqrt n2 | u 1 2` (`utils/fl_tmpl/freeform.py`).  Program:
+`free<n>(g_1, ..., g_n)`, one tree per part (`reference.free_parts`: N=2/3 -> [V2]).
+The single-fast region exponent k is no longer a slot: the evaluator scans
+k in {2,3,4,6,8} and keeps the best (stops at penalty 0).
+
+**Evaluation of g.** Only phi = log g enters, through phi'(u), phi''(u) as u -> oo:
+Puiseux series via sympy (t = 1/u, series at 0+), pushed through Y as
+phi'(Y) = sign(Y) sum c_q |Y|^q, phi''(Y) = sum d_q |Y|^q, truncation remainder
+|Y|^{q_rem} (component kind `free` in `logdomain`).  Log size for the ledger: phi
+integrated termwise; the largest positive power c u^a is the part's gap, c_{-1}
+log u the log level.  Rejected shapes (penalty 1e3): g not positive/finite on
+u in {3,10,30,100}; phi', phi'' not Puiseux (e.g. g = log u); phi >= u^2 (changes
+theta); decaying lead exp(-c u^a); sympy failure or timeout (3 s, SIGALRM); count_ops(g) > 24 or exp/log/root nesting depth > 3 (C50-style caps). Expansions are cached per process.
+
+**Check (tests/test_tmpl_free.py, script runs).**  N=2 and N=3, min over k:
+u^2, u^4, u^2+1, (u+1)^3/u, e^{u^{1/4}} pass; 1, u, 1/u fail (penalty 1, one
+power short); e^{sqrt u} fails (penalty 2-12) -- consistent with the slot table.
+
+**RL wiring.** `LYA_FL_TMPL=1 LYA_TMPL_FREE=1`; tokens `free<n>` and `u` in
+`create_tokens`; priors (`apply_free_overrides`): root `free<n>`; relational ban of
+every x_i under every token (state variables never appear; the diffusion grammar
+maps it to an empty angle-parent set); nonest exp/log; inverse; length <= 1+14n
+(`LYA_TMPL_LENMAX`), soft length loc 1+5n.  Reward glue `rl.free_penalty` (cache
+keyed by the shape strings; prefill pool shared with slot mode).
+
+**Not yet.** N=4/5 parts (both-fast part needs a computed resonant energy instead
+of CE's cited H~_c; region exponents l, m), failure-driven part generation
+(section "non-artificial" plan: parts placed where e^{theta H} fails), option 2
+(candidate counterterms + linear fit) as the blinder p~ track.

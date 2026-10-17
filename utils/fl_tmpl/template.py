@@ -40,6 +40,7 @@ class PartSpec:
     regions: list = field(default_factory=list)
     noise_avg: bool = True
     is_main: bool = False
+    shape: dict = None               # free grammar: freeform.expand_shape data of g (replaces deg/gap)
 
 
 @dataclass
@@ -114,6 +115,10 @@ def part_components(T, ps, theta_sym=THETA):
         comps.append(Component("energy_sq", E, theta_sym))
     else:
         comps.append(Component("energy_lin", E, theta_sym))
+    if ps.shape is not None:
+        if ps.shape["phi1"] or ps.shape["phi2"]:
+            comps.append(Component("free", E, ps.shape))
+        return comps
     if ps.deg:
         comps.append(Component("log", E, ps.deg))
     if ps.gap is not None and ps.a:
@@ -134,6 +139,21 @@ def part_logsize(T, ps):
         logV = E.value.scale(th)
     logV = logV.expand_atoms()
     ll = []
+    if ps.shape is not None:
+        # free shape: log g ~ gap_coef u^gap + log_coef log u, u = |Y| ~ |lead monomial|
+        e, _ = E.lead_key
+        nz = [i for i in range(S.space.n) if e[i] != 0]
+        assert len(nz) == 1, "shape variable lead must be a single momentum or atom"
+        i = nz[0]
+        f = float(e[i])
+        kind = ("p", i) if i < S.space.nP else ("atom", i - S.space.nP)
+        if ps.shape["log_coef"]:
+            ll.append((float(ps.shape["log_coef"]) * f, kind))
+        gap = None
+        if ps.shape["gap"] is not None:
+            assert i < S.space.nP, "gap on an atom variable is not supported"
+            gap = (i, float(ps.shape["gap"]) * f)
+        return logV, ll, gap
     if ps.deg:
         e, par = E.lead_key
         nz = [i for i in range(S.space.n) if e[i] != 0]
@@ -174,7 +194,8 @@ _PART_CACHE = {}
 def _part_signature(T, ps):
     regs = tuple((r.top, tuple((tuple(sorted(a.items())), b) for a, b in r.ineqs)) for r in ps.regions)
     return (T.S.N, T.alpha, str(T.theta), ps.name, ps.fast, ps.energy, ps.energy_kind, ps.deg, ps.gap,
-            str(ps.a), ps.noise_avg, ps.is_main, regs, id(T.macros))
+            str(ps.a), ps.noise_avg, ps.is_main, regs, id(T.macros),
+            None if ps.shape is None else ps.shape["g"])
 
 
 def evaluate(T, cfg=None, theta_windows=True, n_samples=64, seed=0, verbose=False):
